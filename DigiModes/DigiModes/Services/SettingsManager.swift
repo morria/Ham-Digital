@@ -103,6 +103,10 @@ class SettingsManager: NSObject, ObservableObject {
         didSet { save(rttyShift, forKey: "rttyShift") }
     }
 
+    @Published var rttySquelch: Double {
+        didSet { save(rttySquelch, forKey: "rttySquelch") }
+    }
+
     // MARK: - Location
 
     enum LocationStatus: Equatable {
@@ -141,6 +145,7 @@ class SettingsManager: NSObject, ObservableObject {
         self.rttyBaudRate = Self.initialLoadDouble(forKey: "rttyBaudRate", default: 45.45)
         self.rttyMarkFreq = Self.initialLoadDouble(forKey: "rttyMarkFreq", default: 2125.0)
         self.rttyShift = Self.initialLoadDouble(forKey: "rttyShift", default: 170.0)
+        self.rttySquelch = Self.initialLoadDouble(forKey: "rttySquelch", default: 0.3)
 
         super.init()
 
@@ -202,6 +207,7 @@ class SettingsManager: NSObject, ObservableObject {
             self.rttyBaudRate = loadDouble(forKey: "rttyBaudRate", default: 45.45)
             self.rttyMarkFreq = loadDouble(forKey: "rttyMarkFreq", default: 2125.0)
             self.rttyShift = loadDouble(forKey: "rttyShift", default: 170.0)
+            self.rttySquelch = loadDouble(forKey: "rttySquelch", default: 0.3)
         }
     }
 

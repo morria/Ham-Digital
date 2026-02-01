@@ -83,6 +83,9 @@ public final class FSKDemodulator {
         _signalDetected
     }
 
+    /// Squelch level (0.0-1.0). Characters below this signal strength are suppressed.
+    public var squelchLevel: Float = 0.3
+
     /// Average signal strength
     public var signalStrength: Float {
         guard !correlationHistory.isEmpty else { return 0 }
@@ -262,6 +265,9 @@ public final class FSKDemodulator {
 
     /// Decode a Baudot code and emit the character via delegate
     private func decodeAndEmit(_ code: UInt8) {
+        // Apply squelch - suppress output if signal strength is below threshold
+        guard signalStrength >= squelchLevel else { return }
+
         if let character = baudotCodec.decode(code) {
             delegate?.demodulator(
                 self,

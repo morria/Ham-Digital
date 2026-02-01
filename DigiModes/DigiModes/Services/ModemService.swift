@@ -115,6 +115,14 @@ class ModemService: ObservableObject {
         #if canImport(DigiModesCore)
         rttyModem = RTTYModem(configuration: currentRTTYConfiguration)
         rttyModem?.delegate = self
+        multiChannelDemodulator?.setSquelch(Float(settings.rttySquelch))
+        #endif
+    }
+
+    /// Update squelch level for all demodulators
+    func updateSquelch() {
+        #if canImport(DigiModesCore)
+        multiChannelDemodulator?.setSquelch(Float(settings.rttySquelch))
         #endif
     }
 
@@ -125,6 +133,7 @@ class ModemService: ObservableObject {
         // Create demodulator covering common RTTY audio frequencies
         multiChannelDemodulator = MultiChannelRTTYDemodulator.standardSubband()
         multiChannelDemodulator?.delegate = self
+        multiChannelDemodulator?.setSquelch(Float(settings.rttySquelch))
         channelFrequencies = multiChannelDemodulator?.channels.map { $0.frequency } ?? []
     }
     #endif

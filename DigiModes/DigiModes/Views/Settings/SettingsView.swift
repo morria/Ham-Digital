@@ -343,6 +343,17 @@ struct RTTYSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            Section {
+                VStack(alignment: .leading) {
+                    Text("Squelch: \(Int(settings.rttySquelch * 100))%")
+                    Slider(value: $settings.rttySquelch, in: 0...1)
+                }
+            } header: {
+                Text("Squelch")
+            } footer: {
+                Text("Filters noise-induced false decodes. Higher values require stronger signals.")
+            }
         }
         .navigationTitle("RTTY Settings")
     }

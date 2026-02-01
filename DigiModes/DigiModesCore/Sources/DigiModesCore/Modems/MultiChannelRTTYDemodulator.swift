@@ -227,6 +227,14 @@ public final class MultiChannelRTTYDemodulator {
         }
     }
 
+    /// Set squelch level for all channels
+    /// - Parameter level: Squelch level (0.0-1.0)
+    public func setSquelch(_ level: Float) {
+        for demodulator in demodulators.values {
+            demodulator.squelchLevel = level
+        }
+    }
+
     // MARK: - Channel Finding
 
     /// Find channel ID for a demodulator
