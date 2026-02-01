@@ -50,8 +50,9 @@ class AudioService: ObservableObject, @unchecked Sendable {
     /// Start audio engine and configure for playback
     func start() async throws {
         // Configure audio session
+        // Don't use .defaultToSpeaker - we want audio to go to connected USB audio devices (radio)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+        try session.setCategory(.playAndRecord, options: [.allowBluetoothA2DP])
         try session.setActive(true)
 
         // Create audio engine
