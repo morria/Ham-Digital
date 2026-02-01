@@ -113,10 +113,27 @@ struct SettingsView: View {
                             }
                             Slider(value: $settings.outputGain, in: 0.5...3.0, step: 0.1)
                         }
+
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("TX Preamble")
+                                Spacer()
+                                Text(settings.txPreambleMs == 0 ? "Off" : "\(settings.txPreambleMs) ms")
+                                    .foregroundColor(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(settings.txPreambleMs) },
+                                    set: { settings.txPreambleMs = Int($0) }
+                                ),
+                                in: 0...500,
+                                step: 50
+                            )
+                        }
                     } header: {
                         Text("Audio")
                     } footer: {
-                        Text("Increase TX gain if VOX doesn't trigger. Values above 1.0 may clip.")
+                        Text("Increase TX gain if VOX doesn't trigger. TX preamble sends idle data before transmission to allow VOX to key. Set to 0 if using hardware PTT.")
                     }
                 }
 

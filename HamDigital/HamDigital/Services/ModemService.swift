@@ -371,6 +371,42 @@ class ModemService: ObservableObject {
         #endif
     }
 
+    /// Generate preamble samples for VOX keying
+    ///
+    /// Returns mode-appropriate idle/sync data to allow VOX to key before actual data:
+    /// - RTTY: LTRS diddle characters (Baudot `11111` repeated) for receiver sync
+    /// - PSK: Idle carrier (continuous phase) for phase lock
+    /// - Olivia: Sync preamble (not yet implemented)
+    ///
+    /// - Parameter durationMs: Preamble duration in milliseconds
+    /// - Returns: Audio samples for preamble, or nil if mode doesn't support it
+    func generatePreamble(durationMs: Int) -> [Float]? {
+        guard durationMs > 0 else { return nil }
+
+        #if canImport(HamDigitalCore)
+        let durationSeconds = Double(durationMs) / 1000.0
+
+        switch activeMode {
+        case .rtty:
+            guard let modem = rttyModem else { return nil }
+            // Generate LTRS diddles - these maintain receiver bit sync
+            // and are non-printing if some are missed
+            return modem.generateIdle(duration: durationSeconds)
+
+        case .psk31, .bpsk63, .qpsk31, .qpsk63:
+            guard let modem = pskModem else { return nil }
+            // Generate idle carrier for PSK phase lock
+            return modem.generateIdle(duration: durationSeconds)
+
+        case .olivia:
+            // Not yet implemented
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
     // MARK: - Channel Management
 
     /// Tune to a specific frequency

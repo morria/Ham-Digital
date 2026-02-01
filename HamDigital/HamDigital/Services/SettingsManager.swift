@@ -58,6 +58,17 @@ class SettingsManager: NSObject, ObservableObject {
         return defaultValue
     }
 
+    /// Load an integer value, preferring iCloud over local
+    private func loadInt(forKey key: String, default defaultValue: Int) -> Int {
+        if cloud.object(forKey: key) != nil {
+            return Int(cloud.longLong(forKey: key))
+        }
+        if local.object(forKey: key) != nil {
+            return local.integer(forKey: key)
+        }
+        return defaultValue
+    }
+
     // MARK: - Published Properties (persisted via didSet)
 
     @Published var callsign: String {
@@ -122,6 +133,13 @@ class SettingsManager: NSObject, ObservableObject {
         didSet { save(outputGain, forKey: "outputGain") }
     }
 
+    /// TX preamble duration in milliseconds (0 = disabled).
+    /// Sends mode-appropriate idle data before transmission to allow VOX to key.
+    /// RTTY sends LTRS diddles, PSK sends idle carrier.
+    @Published var txPreambleMs: Int {
+        didSet { save(txPreambleMs, forKey: "txPreambleMs") }
+    }
+
     // MARK: - Location
 
     enum LocationStatus: Equatable {
@@ -164,6 +182,7 @@ class SettingsManager: NSObject, ObservableObject {
         self.psk31CenterFreq = Self.initialLoadDouble(forKey: "psk31CenterFreq", default: 1000.0)
         self.psk31Squelch = Self.initialLoadDouble(forKey: "psk31Squelch", default: 0.3)
         self.outputGain = Self.initialLoadDouble(forKey: "outputGain", default: 1.0)
+        self.txPreambleMs = Self.initialLoadInt(forKey: "txPreambleMs", default: 200)
 
         super.init()
 
@@ -212,6 +231,14 @@ class SettingsManager: NSObject, ObservableObject {
         return defaultValue
     }
 
+    private static func initialLoadInt(forKey key: String, default defaultValue: Int) -> Int {
+        let cloud = NSUbiquitousKeyValueStore.default
+        let local = UserDefaults.standard
+        if cloud.object(forKey: key) != nil { return Int(cloud.longLong(forKey: key)) }
+        if local.object(forKey: key) != nil { return local.integer(forKey: key) }
+        return defaultValue
+    }
+
     // MARK: - iCloud Sync
 
     @objc private func cloudDidChange(_ notification: Notification) {
@@ -229,6 +256,7 @@ class SettingsManager: NSObject, ObservableObject {
             self.psk31CenterFreq = loadDouble(forKey: "psk31CenterFreq", default: 1000.0)
             self.psk31Squelch = loadDouble(forKey: "psk31Squelch", default: 0.3)
             self.outputGain = loadDouble(forKey: "outputGain", default: 1.0)
+            self.txPreambleMs = loadInt(forKey: "txPreambleMs", default: 200)
         }
     }
 

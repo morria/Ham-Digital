@@ -113,22 +113,6 @@ struct ChannelDetailView: View {
 
                 // Input bar
                 VStack(spacing: 0) {
-                    if viewModel.isTransmitting {
-                        HStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 8, height: 8)
-                            Text("TRANSMITTING")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(.red)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.red.opacity(0.1))
-                    }
-
                     // Frequency warning
                     if let warning = viewModel.frequencyWarning {
                         HStack {

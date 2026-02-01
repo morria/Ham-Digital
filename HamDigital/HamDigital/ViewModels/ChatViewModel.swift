@@ -6,6 +6,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import AVFoundation
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -356,18 +357,53 @@ class ChatViewModel: ObservableObject {
     }
 
     private func performTransmission(text: String) async throws {
+        // Get TX preamble setting
+        let preambleMs = SettingsManager.shared.txPreambleMs
+
         // Encode text to audio samples via modem service
-        if let buffer = modemService.encodeTxText(text) {
-            print("[ChatViewModel] Encoded \(text.count) chars -> \(buffer.frameLength) samples")
-            // Apply output gain from settings
-            audioService.outputGain = Float(SettingsManager.shared.outputGain)
-            // Play the audio buffer
-            try await audioService.playBuffer(buffer)
-            print("[ChatViewModel] Playback complete")
-        } else {
+        let messageSamples = modemService.encodeTxSamples(text)
+        guard !messageSamples.isEmpty else {
             print("[ChatViewModel] Modem encoding failed - DigiModesCore may not be linked")
             throw AudioServiceError.encodingFailed
         }
+
+        // Combine preamble + message into single buffer for gapless playback
+        var combinedSamples: [Float]
+        if preambleMs > 0, let preamble = modemService.generatePreamble(durationMs: preambleMs) {
+            combinedSamples = preamble + messageSamples
+            print("[ChatViewModel] TX with \(preambleMs)ms preamble: \(preamble.count) + \(messageSamples.count) = \(combinedSamples.count) samples")
+        } else {
+            combinedSamples = messageSamples
+            print("[ChatViewModel] Encoded \(text.count) chars -> \(combinedSamples.count) samples")
+        }
+
+        // Create audio buffer from combined samples
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48000,
+            channels: 1,
+            interleaved: false
+        ),
+        let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(combinedSamples.count)
+        ) else {
+            print("[ChatViewModel] Failed to create audio buffer")
+            throw AudioServiceError.encodingFailed
+        }
+
+        buffer.frameLength = AVAudioFrameCount(combinedSamples.count)
+        if let channelData = buffer.floatChannelData?[0] {
+            for (index, sample) in combinedSamples.enumerated() {
+                channelData[index] = sample
+            }
+        }
+
+        // Apply output gain from settings
+        audioService.outputGain = Float(SettingsManager.shared.outputGain)
+        // Play the audio buffer
+        try await audioService.playBuffer(buffer)
+        print("[ChatViewModel] Playback complete")
     }
 
     // MARK: - Channel Management for RX

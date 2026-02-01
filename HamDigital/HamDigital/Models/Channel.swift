@@ -14,6 +14,10 @@ struct Channel: Identifiable, Equatable, Hashable {
     var messages: [Message]
     var lastActivity: Date
     var decodingBuffer: String   // Currently being decoded (real-time)
+    var squelch: Int             // Per-channel squelch threshold (0-100)
+
+    /// Default squelch threshold for new channels
+    static let defaultSquelch = 0
 
     init(
         id: UUID = UUID(),
@@ -21,7 +25,8 @@ struct Channel: Identifiable, Equatable, Hashable {
         callsign: String? = nil,
         messages: [Message] = [],
         lastActivity: Date = Date(),
-        decodingBuffer: String = ""
+        decodingBuffer: String = "",
+        squelch: Int = Channel.defaultSquelch
     ) {
         self.id = id
         self.frequency = frequency
@@ -29,6 +34,7 @@ struct Channel: Identifiable, Equatable, Hashable {
         self.messages = messages
         self.lastActivity = lastActivity
         self.decodingBuffer = decodingBuffer
+        self.squelch = squelch
     }
 
     /// Display name: callsign if known, otherwise frequency
@@ -66,9 +72,23 @@ struct Channel: Identifiable, Equatable, Hashable {
         Date().timeIntervalSince(lastActivity)
     }
 
-    /// Whether the channel has any decoded content
+    /// Minimum printable characters required before channel appears in list.
+    /// Filters out noise bursts that decode as 1-2 random characters.
+    static let minimumVisibleCharacters = 3
+
+    /// Count of printable (non-whitespace, non-control) characters across all content
+    private var printableCharacterCount: Int {
+        let bufferPrintable = decodingBuffer.filter { !$0.isWhitespace && !$0.isNewline }
+        let messagePrintable = messages.reduce(0) { count, msg in
+            count + msg.content.filter { !$0.isWhitespace && !$0.isNewline }.count
+        }
+        return bufferPrintable.count + messagePrintable
+    }
+
+    /// Whether the channel has enough content to display.
+    /// Requires minimum printable characters to filter noise.
     var hasContent: Bool {
-        !messages.isEmpty || !decodingBuffer.isEmpty
+        printableCharacterCount >= Self.minimumVisibleCharacters
     }
 
     static func == (lhs: Channel, rhs: Channel) -> Bool {
