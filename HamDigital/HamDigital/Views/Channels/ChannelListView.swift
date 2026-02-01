@@ -42,7 +42,7 @@ struct ChannelListView: View {
                 }
             } else {
                 List {
-                    ForEach(viewModel.channels) { channel in
+                    ForEach(viewModel.channels.sorted { $0.frequency < $1.frequency }) { channel in
                         NavigationLink(value: channel) {
                             ChannelRowView(channel: channel)
                         }
