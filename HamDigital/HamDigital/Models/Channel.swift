@@ -66,6 +66,11 @@ struct Channel: Identifiable, Equatable, Hashable {
         Date().timeIntervalSince(lastActivity)
     }
 
+    /// Whether the channel has any decoded content
+    var hasContent: Bool {
+        !messages.isEmpty || !decodingBuffer.isEmpty
+    }
+
     static func == (lhs: Channel, rhs: Channel) -> Bool {
         lhs.id == rhs.id
     }

@@ -11,8 +11,9 @@ struct ChannelListView: View {
     @EnvironmentObject var viewModel: ChatViewModel
 
     var body: some View {
+        let visibleChannels = viewModel.channels.filter { $0.hasContent }
         Group {
-            if viewModel.channels.isEmpty {
+            if visibleChannels.isEmpty {
                 VStack(spacing: 16) {
                     if viewModel.isListening {
                         // Actively listening
@@ -42,12 +43,11 @@ struct ChannelListView: View {
                 }
             } else {
                 List {
-                    ForEach(viewModel.channels.sorted { $0.frequency < $1.frequency }) { channel in
+                    ForEach(visibleChannels.sorted { $0.frequency < $1.frequency }) { channel in
                         NavigationLink(value: channel) {
                             ChannelRowView(channel: channel)
                         }
                     }
-                    .onDelete(perform: deleteChannels)
                 }
                 .listStyle(.plain)
             }
@@ -55,10 +55,6 @@ struct ChannelListView: View {
         .navigationDestination(for: Channel.self) { channel in
             ChannelDetailView(channel: channel)
         }
-    }
-
-    private func deleteChannels(at offsets: IndexSet) {
-        viewModel.deleteChannels(at: offsets)
     }
 }
 
