@@ -71,23 +71,27 @@ class AudioService: ObservableObject, @unchecked Sendable {
         self.playerNode = player
         engine.attach(player)
 
-        // Get output format and create mono format for our signals
+        // Get output format - use stereo to ensure USB soundcards receive audio on both channels
         let outputFormat = engine.outputNode.outputFormat(forBus: 0)
         sampleRate = outputFormat.sampleRate
+        let outputChannels = outputFormat.channelCount
 
-        // Create mono Float32 format at the engine's sample rate
-        guard let monoFormat = AVAudioFormat(
+        print("[AudioService] Output format: \(sampleRate) Hz, \(outputChannels) channels")
+
+        // Create stereo Float32 format to match typical USB audio devices
+        // We'll duplicate our mono signal to both channels
+        guard let stereoFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: sampleRate,
-            channels: 1,
+            channels: 2,
             interleaved: false
         ) else {
             throw AudioServiceError.formatError
         }
-        self.playbackFormat = monoFormat
+        self.playbackFormat = stereoFormat
 
-        // Connect player -> main mixer
-        engine.connect(player, to: engine.mainMixerNode, format: monoFormat)
+        // Connect player -> main mixer with stereo format
+        engine.connect(player, to: engine.mainMixerNode, format: stereoFormat)
 
         // Install input tap for receiving audio
         let inputNode = engine.inputNode
@@ -327,6 +331,7 @@ class AudioService: ObservableObject, @unchecked Sendable {
     }
 
     /// Create AVAudioPCMBuffer from Float array with gain applied
+    /// Outputs stereo (same signal on both channels) for USB soundcard compatibility
     private func createBuffer(from samples: [Float], format: AVAudioFormat) -> AVAudioPCMBuffer? {
         guard let buffer = AVAudioPCMBuffer(
             pcmFormat: format,
@@ -337,11 +342,20 @@ class AudioService: ObservableObject, @unchecked Sendable {
 
         buffer.frameLength = AVAudioFrameCount(samples.count)
 
-        if let channelData = buffer.floatChannelData?[0] {
-            for (index, sample) in samples.enumerated() {
-                // Apply output gain (clamp to prevent distortion)
-                let gained = sample * outputGain
-                channelData[index] = max(-1.0, min(1.0, gained))
+        let channelCount = Int(format.channelCount)
+        guard let floatChannelData = buffer.floatChannelData else {
+            return nil
+        }
+
+        // Fill all channels with the same signal (mono -> stereo)
+        for (index, sample) in samples.enumerated() {
+            // Apply output gain (clamp to prevent distortion)
+            let gained = sample * outputGain
+            let clampedSample = max(-1.0, min(1.0, gained))
+
+            // Write to all channels (typically 2 for stereo)
+            for channel in 0..<channelCount {
+                floatChannelData[channel][index] = clampedSample
             }
         }
 
