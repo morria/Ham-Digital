@@ -9,142 +9,190 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var settings = SettingsManager.shared
     var chatViewModel: ChatViewModel?
+    /// When set, only show settings for this specific mode (used when accessing from channel list)
+    var filterMode: DigitalMode?
+
+    /// Helper to determine if we should show a particular mode's settings
+    private func shouldShowModeSettings(_ mode: DigitalMode) -> Bool {
+        guard ModeConfig.isEnabled(mode) else { return false }
+        // If filtering, only show the filtered mode
+        if let filter = filterMode {
+            return mode == filter || (filter.isPSKMode && mode == .psk31)
+        }
+        return true
+    }
+
+    /// Title based on whether we're filtering
+    private var navigationTitle: String {
+        if let mode = filterMode {
+            return "\(mode.displayName) Settings"
+        }
+        return "Settings"
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("My Station") {
-                    TextField("Callsign", text: $settings.callsign)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                    TextField("Name", text: $settings.operatorName)
-                }
-
-                Section {
-                    Toggle("Use GPS for Location", isOn: $settings.useGPSLocation)
-
-                    if settings.useGPSLocation {
-                        // GPS-derived values (read-only display)
-                        HStack {
-                            Text("Grid Square")
-                            Spacer()
-                            if settings.gpsGrid.isEmpty {
-                                Text(locationStatusText)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text(settings.gpsGrid)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        HStack {
-                            Text("QTH")
-                            Spacer()
-                            if settings.gpsQTH.isEmpty {
-                                Text(locationStatusText)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text(settings.gpsQTH)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        if case .denied = settings.locationStatus {
-                            Text("Location access denied. Enable in Settings app.")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-
-                        Button("Update Location") {
-                            settings.requestLocationUpdate()
-                        }
-                        .disabled(settings.locationStatus == .updating)
-                    } else {
-                        // Manual entry
-                        TextField("Grid Square", text: $settings.grid)
+                // Show station/location/audio sections only when not filtering
+                if filterMode == nil {
+                    Section("My Station") {
+                        TextField("Callsign", text: $settings.callsign)
                             .textInputAutocapitalization(.characters)
-                        TextField("QTH (City, State)", text: $settings.qth)
-                    }
-                } header: {
-                    Text("Location")
-                } footer: {
-                    if settings.useGPSLocation {
-                        Text("Grid square and QTH are automatically determined from your location.")
-                    } else {
-                        Text("Enter your Maidenhead grid square (e.g., DM79lv) and location manually.")
-                    }
-                }
-
-                Section {
-                    NavigationLink {
-                        AudioMeterView()
-                    } label: {
-                        Label("Input Level Meter", systemImage: "waveform")
+                            .autocorrectionDisabled()
+                        TextField("Name", text: $settings.operatorName)
                     }
 
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text("TX Output Gain")
-                            Spacer()
-                            Text(String(format: "%.1fx", settings.outputGain))
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $settings.outputGain, in: 0.5...3.0, step: 0.1)
-                    }
-                } header: {
-                    Text("Audio")
-                } footer: {
-                    Text("Increase TX gain if VOX doesn't trigger. Values above 1.0 may clip.")
-                }
-
-                Section("Digital Modes") {
-                    if ModeConfig.isEnabled(.rtty) {
-                        NavigationLink {
-                            RTTYSettingsView()
-                        } label: {
-                            Label("RTTY Settings", systemImage: "dot.radiowaves.left.and.right")
-                        }
-                    }
-
-                    if ModeConfig.isEnabled(.psk31) {
-                        NavigationLink {
-                            Text("PSK31 Settings - Coming Soon")
-                                .foregroundColor(.secondary)
-                        } label: {
-                            Label("PSK31 Settings", systemImage: "waveform.path")
-                        }
-                    }
-
-                    if ModeConfig.isEnabled(.olivia) {
-                        NavigationLink {
-                            Text("Olivia Settings - Coming Soon")
-                                .foregroundColor(.secondary)
-                        } label: {
-                            Label("Olivia Settings", systemImage: "waveform.circle")
-                        }
-                    }
-                }
-
-                if let viewModel = chatViewModel {
                     Section {
-                        DebugAudioTestView(chatViewModel: viewModel)
+                        Toggle("Use GPS for Location", isOn: $settings.useGPSLocation)
+
+                        if settings.useGPSLocation {
+                            // GPS-derived values (read-only display)
+                            HStack {
+                                Text("Grid Square")
+                                Spacer()
+                                if settings.gpsGrid.isEmpty {
+                                    Text(locationStatusText)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text(settings.gpsGrid)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            HStack {
+                                Text("QTH")
+                                Spacer()
+                                if settings.gpsQTH.isEmpty {
+                                    Text(locationStatusText)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text(settings.gpsQTH)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            if case .denied = settings.locationStatus {
+                                Text("Location access denied. Enable in Settings app.")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+
+                            Button("Update Location") {
+                                settings.requestLocationUpdate()
+                            }
+                            .disabled(settings.locationStatus == .updating)
+                        } else {
+                            // Manual entry
+                            TextField("Grid Square", text: $settings.grid)
+                                .textInputAutocapitalization(.characters)
+                            TextField("QTH (City, State)", text: $settings.qth)
+                        }
                     } header: {
-                        Text("Debug")
+                        Text("Location")
                     } footer: {
-                        Text("Test the decoding pipeline with pre-generated RTTY audio files.")
+                        if settings.useGPSLocation {
+                            Text("Grid square and QTH are automatically determined from your location.")
+                        } else {
+                            Text("Enter your Maidenhead grid square (e.g., DM79lv) and location manually.")
+                        }
+                    }
+
+                    Section {
+                        NavigationLink {
+                            AudioMeterView()
+                        } label: {
+                            Label("Input Level Meter", systemImage: "waveform")
+                        }
+
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("TX Output Gain")
+                                Spacer()
+                                Text(String(format: "%.1fx", settings.outputGain))
+                                    .foregroundColor(.secondary)
+                            }
+                            Slider(value: $settings.outputGain, in: 0.5...3.0, step: 0.1)
+                        }
+                    } header: {
+                        Text("Audio")
+                    } footer: {
+                        Text("Increase TX gain if VOX doesn't trigger. Values above 1.0 may clip.")
                     }
                 }
 
-                Section("About") {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
+                // Mode-specific settings
+                if filterMode == nil {
+                    // Full settings view - show all modes as navigation links
+                    Section("Digital Modes") {
+                        if shouldShowModeSettings(.rtty) {
+                            NavigationLink {
+                                RTTYSettingsView()
+                            } label: {
+                                Label("RTTY Settings", systemImage: "dot.radiowaves.left.and.right")
+                            }
+                        }
+
+                        if shouldShowModeSettings(.psk31) {
+                            NavigationLink {
+                                PSK31SettingsView()
+                            } label: {
+                                Label("PSK Settings", systemImage: "waveform.path")
+                            }
+                        }
+
+                        if shouldShowModeSettings(.olivia) {
+                            NavigationLink {
+                                Text("Olivia Settings - Coming Soon")
+                                    .foregroundColor(.secondary)
+                            } label: {
+                                Label("Olivia Settings", systemImage: "waveform.circle")
+                            }
+                        }
+                    }
+
+                    Section("Reference") {
+                        NavigationLink {
+                            FrequencyReferenceView(filterMode: nil)
+                        } label: {
+                            Label("Band Frequencies", systemImage: "list.bullet.rectangle")
+                        }
+                    }
+                } else {
+                    // Filtered view - show mode settings inline
+                    if filterMode == .rtty {
+                        rttySettingsInline
+                    } else if filterMode?.isPSKMode == true {
+                        pskSettingsInline
+                    } else if filterMode == .olivia {
+                        Section("Olivia Settings") {
+                            Text("Coming Soon")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                if filterMode == nil {
+                    if let viewModel = chatViewModel {
+                        Section {
+                            DebugAudioTestView(chatViewModel: viewModel)
+                        } header: {
+                            Text("Debug")
+                        } footer: {
+                            Text("Test the decoding pipeline with pre-generated RTTY audio files.")
+                        }
+                    }
+
+                    Section("About") {
+                        HStack {
+                            Text("Version")
+                            Spacer()
+                            Text("1.0.0")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -152,6 +200,139 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Inline Mode Settings
+
+    @ViewBuilder
+    private var rttySettingsInline: some View {
+        Section("Baud Rate") {
+            Picker("Baud Rate", selection: $settings.rttyBaudRate) {
+                Text("45.45 Baud").tag(45.45)
+                Text("50 Baud").tag(50.0)
+                Text("75 Baud").tag(75.0)
+            }
+        }
+
+        Section("Frequencies") {
+            HStack {
+                Text("Mark Frequency")
+                Spacer()
+                Text("\(Int(settings.rttyMarkFreq)) Hz")
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Text("Shift")
+                Spacer()
+                Text("\(Int(settings.rttyShift)) Hz")
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Text("Space Frequency")
+                Spacer()
+                Text("\(Int(settings.rttyMarkFreq - settings.rttyShift)) Hz")
+                    .foregroundColor(.secondary)
+            }
+        }
+
+        Section {
+            VStack(alignment: .leading) {
+                Text("Squelch: \(Int(settings.rttySquelch * 100))%")
+                Slider(value: $settings.rttySquelch, in: 0...1)
+            }
+        } header: {
+            Text("Squelch")
+        } footer: {
+            Text("Filters noise-induced false decodes. Higher values require stronger signals.")
+        }
+
+        Section {
+            NavigationLink {
+                FrequencyReferenceView(filterMode: .rtty)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Common RTTY Frequencies", systemImage: "list.bullet.rectangle")
+                    CompactFrequencyReference(mode: .rtty)
+                }
+            }
+        } header: {
+            Text("Band Reference")
+        }
+    }
+
+    @ViewBuilder
+    private var pskSettingsInline: some View {
+        Section {
+            VStack(alignment: .leading) {
+                HStack {
+                    Text("Center Frequency")
+                    Spacer()
+                    Text("\(Int(settings.psk31CenterFreq)) Hz")
+                        .foregroundColor(.secondary)
+                }
+                Slider(value: $settings.psk31CenterFreq, in: 500...2500, step: 50)
+            }
+        } header: {
+            Text("Frequency")
+        } footer: {
+            Text("Audio frequency for transmit and single-channel receive.")
+        }
+
+        Section {
+            VStack(alignment: .leading) {
+                HStack {
+                    Text("Squelch")
+                    Spacer()
+                    Text("\(Int(settings.psk31Squelch * 100))%")
+                        .foregroundColor(.secondary)
+                }
+                Slider(value: $settings.psk31Squelch, in: 0...1)
+            }
+        } header: {
+            Text("Squelch")
+        } footer: {
+            Text("Filters noise-induced false decodes. Higher values require stronger signals.")
+        }
+
+        if let mode = filterMode {
+            Section("Signal Parameters") {
+                HStack {
+                    Text("Baud Rate")
+                    Spacer()
+                    Text(mode.subtitle)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Modulation")
+                    Spacer()
+                    Text(mode.rawValue.hasPrefix("Q") ? "QPSK" : "BPSK")
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Encoding")
+                    Spacer()
+                    Text("Varicode")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Section {
+                NavigationLink {
+                    FrequencyReferenceView(filterMode: mode)
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Common PSK Frequencies", systemImage: "list.bullet.rectangle")
+                        CompactFrequencyReference(mode: mode)
+                    }
+                }
+            } header: {
+                Text("Band Reference")
             }
         }
     }
@@ -384,6 +565,93 @@ struct RTTYSettingsView: View {
     }
 }
 
+// MARK: - PSK31 Settings View
+
+struct PSK31SettingsView: View {
+    @ObservedObject private var settings = SettingsManager.shared
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Center Frequency")
+                        Spacer()
+                        Text("\(Int(settings.psk31CenterFreq)) Hz")
+                            .foregroundColor(.secondary)
+                    }
+                    Slider(value: $settings.psk31CenterFreq, in: 500...2500, step: 50)
+                }
+            } header: {
+                Text("Frequency")
+            } footer: {
+                Text("Audio frequency for transmit and single-channel receive. Multi-channel receive monitors a range of frequencies.")
+            }
+
+            Section {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Squelch")
+                        Spacer()
+                        Text("\(Int(settings.psk31Squelch * 100))%")
+                            .foregroundColor(.secondary)
+                    }
+                    Slider(value: $settings.psk31Squelch, in: 0...1)
+                }
+            } header: {
+                Text("Squelch")
+            } footer: {
+                Text("Filters noise-induced false decodes. Higher values require stronger signals.")
+            }
+
+            Section("Signal Parameters") {
+                HStack {
+                    Text("Baud Rate")
+                    Spacer()
+                    Text("31.25 baud")
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Modulation")
+                    Spacer()
+                    Text("BPSK")
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Bandwidth")
+                    Spacer()
+                    Text("~31 Hz")
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Encoding")
+                    Spacer()
+                    Text("Varicode")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("PSK31 is a narrow-band digital mode using phase-shift keying at 31.25 baud.")
+
+                    Text("Unlike RTTY, PSK31 is case-sensitive and uses variable-length encoding where common characters require fewer bits.")
+
+                    Text("The narrow bandwidth (~31 Hz) makes it excellent for weak-signal communication on crowded bands.")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            } header: {
+                Text("About PSK31")
+            }
+        }
+        .navigationTitle("PSK31 Settings")
+    }
+}
+
 // MARK: - Debug Audio Test View
 
 struct DebugAudioTestView: View {
@@ -463,12 +731,314 @@ struct DebugAudioTestView: View {
     }
 }
 
-#Preview {
-    SettingsView()
+// MARK: - Frequency Reference Data
+
+/// Amateur band with frequency range
+struct AmateurBand: Identifiable {
+    let id = UUID()
+    let name: String           // e.g., "20m"
+    let frequency: String      // e.g., "14 MHz"
+    let rttyFreq: String?      // Calling frequency for RTTY
+    let pskFreq: String?       // Calling frequency for PSK modes
+    let oliviaFreq: String?    // Calling frequency for Olivia
+    let notes: String?         // Additional notes
+}
+
+/// Common amateur band frequency reference
+enum FrequencyReference {
+    static let bands: [AmateurBand] = [
+        AmateurBand(
+            name: "160m",
+            frequency: "1.8 MHz",
+            rttyFreq: "1.800-1.810",
+            pskFreq: "1.838",
+            oliviaFreq: "1.838",
+            notes: "Night-time band, long-range"
+        ),
+        AmateurBand(
+            name: "80m",
+            frequency: "3.5 MHz",
+            rttyFreq: "3.580-3.600",
+            pskFreq: "3.580",
+            oliviaFreq: "3.583",
+            notes: "Best at night, regional"
+        ),
+        AmateurBand(
+            name: "40m",
+            frequency: "7 MHz",
+            rttyFreq: "7.080-7.100",
+            pskFreq: "7.070",
+            oliviaFreq: "7.073",
+            notes: "Day/night, very popular"
+        ),
+        AmateurBand(
+            name: "30m",
+            frequency: "10 MHz",
+            rttyFreq: "10.140-10.150",
+            pskFreq: "10.142",
+            oliviaFreq: "10.145",
+            notes: "WARC band, no contests"
+        ),
+        AmateurBand(
+            name: "20m",
+            frequency: "14 MHz",
+            rttyFreq: "14.080-14.099",
+            pskFreq: "14.070",
+            oliviaFreq: "14.073",
+            notes: "Primary DX band, daytime"
+        ),
+        AmateurBand(
+            name: "17m",
+            frequency: "18 MHz",
+            rttyFreq: "18.100-18.109",
+            pskFreq: "18.100",
+            oliviaFreq: "18.103",
+            notes: "WARC band, daytime"
+        ),
+        AmateurBand(
+            name: "15m",
+            frequency: "21 MHz",
+            rttyFreq: "21.080-21.100",
+            pskFreq: "21.070",
+            oliviaFreq: "21.073",
+            notes: "Daytime, solar-dependent"
+        ),
+        AmateurBand(
+            name: "12m",
+            frequency: "24 MHz",
+            rttyFreq: "24.920-24.929",
+            pskFreq: "24.920",
+            oliviaFreq: "24.923",
+            notes: "WARC band, solar-dependent"
+        ),
+        AmateurBand(
+            name: "10m",
+            frequency: "28 MHz",
+            rttyFreq: "28.080-28.100",
+            pskFreq: "28.120",
+            oliviaFreq: "28.123",
+            notes: "Daytime, solar maximum"
+        ),
+        AmateurBand(
+            name: "6m",
+            frequency: "50 MHz",
+            rttyFreq: nil,
+            pskFreq: "50.290",
+            oliviaFreq: "50.293",
+            notes: "Sporadic E propagation"
+        )
+    ]
+
+    /// Bands relevant for a specific mode
+    static func bands(for mode: DigitalMode) -> [AmateurBand] {
+        switch mode {
+        case .rtty:
+            return bands.filter { $0.rttyFreq != nil }
+        case .psk31, .bpsk63, .qpsk31, .qpsk63:
+            return bands.filter { $0.pskFreq != nil }
+        case .olivia:
+            return bands.filter { $0.oliviaFreq != nil }
+        }
+    }
+}
+
+// MARK: - Frequency Reference View
+
+struct FrequencyReferenceView: View {
+    var filterMode: DigitalMode?
+
+    private var displayBands: [AmateurBand] {
+        if let mode = filterMode {
+            return FrequencyReference.bands(for: mode)
+        }
+        return FrequencyReference.bands
+    }
+
+    private var navigationTitle: String {
+        if let mode = filterMode {
+            return "\(mode.displayName) Frequencies"
+        }
+        return "Band Frequencies"
+    }
+
+    var body: some View {
+        List {
+            if filterMode == nil {
+                Section {
+                    Text("Common calling frequencies for digital modes on amateur HF bands. Frequencies shown in MHz.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            ForEach(displayBands) { band in
+                Section {
+                    BandFrequencyRow(band: band, filterMode: filterMode)
+                } header: {
+                    HStack {
+                        Text(band.name)
+                            .font(.headline)
+                        Spacer()
+                        Text(band.frequency)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                } footer: {
+                    if let notes = band.notes {
+                        Text(notes)
+                    }
+                }
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tips for Operating")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    tipRow(icon: "arrow.up.arrow.down", text: "USB mode on all HF bands")
+                    tipRow(icon: "waveform", text: "Set radio dial to calling frequency, adjust audio tone to find activity")
+                    tipRow(icon: "speaker.wave.2", text: "Keep audio levels moderate to avoid distortion")
+                    tipRow(icon: "clock", text: "20m best during day, 40m/80m better at night")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+        }
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func tipRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .frame(width: 16)
+            Text(text)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct BandFrequencyRow: View {
+    let band: AmateurBand
+    var filterMode: DigitalMode?
+
+    var body: some View {
+        if let mode = filterMode {
+            // Show only the filtered mode's frequency
+            HStack {
+                Text("Calling Frequency")
+                Spacer()
+                Text(frequencyText(for: mode) ?? "—")
+                    .foregroundColor(.secondary)
+                    .font(.system(.body, design: .monospaced))
+            }
+        } else {
+            // Show all modes
+            if let rttyFreq = band.rttyFreq {
+                frequencyRow(mode: "RTTY", frequency: rttyFreq)
+            }
+            if let pskFreq = band.pskFreq {
+                frequencyRow(mode: "PSK", frequency: pskFreq)
+            }
+            if let oliviaFreq = band.oliviaFreq {
+                frequencyRow(mode: "Olivia", frequency: oliviaFreq)
+            }
+        }
+    }
+
+    private func frequencyText(for mode: DigitalMode) -> String? {
+        switch mode {
+        case .rtty:
+            return band.rttyFreq
+        case .psk31, .bpsk63, .qpsk31, .qpsk63:
+            return band.pskFreq
+        case .olivia:
+            return band.oliviaFreq
+        }
+    }
+
+    @ViewBuilder
+    private func frequencyRow(mode: String, frequency: String) -> some View {
+        HStack {
+            Text(mode)
+                .foregroundColor(.primary)
+            Spacer()
+            Text(frequency)
+                .foregroundColor(.secondary)
+                .font(.system(.body, design: .monospaced))
+        }
+    }
+}
+
+// MARK: - Compact Frequency Reference (for inline display)
+
+struct CompactFrequencyReference: View {
+    let mode: DigitalMode
+
+    private var bands: [AmateurBand] {
+        FrequencyReference.bands(for: mode)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(bands.prefix(5)) { band in
+                HStack {
+                    Text(band.name)
+                        .frame(width: 40, alignment: .leading)
+                        .foregroundColor(.secondary)
+                    Text(frequencyText(for: band) ?? "—")
+                        .font(.system(.caption, design: .monospaced))
+                }
+            }
+            if bands.count > 5 {
+                Text("+ \(bands.count - 5) more bands...")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .font(.caption)
+    }
+
+    private func frequencyText(for band: AmateurBand) -> String? {
+        switch mode {
+        case .rtty:
+            return band.rttyFreq
+        case .psk31, .bpsk63, .qpsk31, .qpsk63:
+            return band.pskFreq
+        case .olivia:
+            return band.oliviaFreq
+        }
+    }
+}
+
+#Preview("Full Settings") {
+    SettingsView(filterMode: nil)
+}
+
+#Preview("RTTY Settings") {
+    SettingsView(filterMode: .rtty)
+}
+
+#Preview("PSK31 Settings") {
+    SettingsView(filterMode: .psk31)
 }
 
 #Preview("Audio Meter") {
     NavigationStack {
         AudioMeterView()
+    }
+}
+
+#Preview("Frequency Reference") {
+    NavigationStack {
+        FrequencyReferenceView(filterMode: nil)
+    }
+}
+
+#Preview("PSK Frequency Reference") {
+    NavigationStack {
+        FrequencyReferenceView(filterMode: .psk31)
     }
 }

@@ -17,13 +17,13 @@ struct ChannelListView: View {
                 VStack(spacing: 16) {
                     if viewModel.isListening {
                         // Actively listening
-                        Image(systemName: "waveform")
+                        Image(systemName: viewModel.selectedMode.iconName)
                             .font(.system(size: 48))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(viewModel.selectedMode.color)
                         Text("Listening...")
                             .font(.headline)
                             .foregroundColor(.primary)
-                        Text("No signals decoded yet. Monitoring audio input for RTTY transmissions.")
+                        Text("No signals decoded yet. Monitoring for \(viewModel.selectedMode.displayName) transmissions.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -50,13 +50,13 @@ struct ChannelListView: View {
                         .padding(.top, 8)
                     } else {
                         // Not listening yet
-                        Image(systemName: "waveform.slash")
+                        Image(systemName: viewModel.selectedMode.iconName)
                             .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        Text("Not Listening")
+                            .foregroundColor(viewModel.selectedMode.color.opacity(0.5))
+                        Text("Starting...")
                             .font(.headline)
                             .foregroundColor(.primary)
-                        Text("Audio service starting...")
+                        Text("Initializing \(viewModel.selectedMode.displayName) decoder...")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }

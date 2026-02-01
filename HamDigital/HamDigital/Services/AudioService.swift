@@ -71,15 +71,17 @@ class AudioService: ObservableObject, @unchecked Sendable {
         self.playerNode = player
         engine.attach(player)
 
-        // Get output format - use stereo to ensure USB soundcards receive audio on both channels
-        let outputFormat = engine.outputNode.outputFormat(forBus: 0)
-        sampleRate = outputFormat.sampleRate
-        let outputChannels = outputFormat.channelCount
+        // Get output format from the hardware
+        let outputNode = engine.outputNode
+        let hardwareFormat = outputNode.outputFormat(forBus: 0)
+        sampleRate = hardwareFormat.sampleRate
+        let outputChannels = hardwareFormat.channelCount
 
-        print("[AudioService] Output format: \(sampleRate) Hz, \(outputChannels) channels")
+        print("[AudioService] Hardware output format: \(sampleRate) Hz, \(outputChannels) channels")
+        print("[AudioService] Hardware format details: \(hardwareFormat)")
 
         // Create stereo Float32 format to match typical USB audio devices
-        // We'll duplicate our mono signal to both channels
+        // Use non-interleaved format for AVAudioEngine compatibility
         guard let stereoFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: sampleRate,
@@ -90,8 +92,21 @@ class AudioService: ObservableObject, @unchecked Sendable {
         }
         self.playbackFormat = stereoFormat
 
+        // Get the mixer's output format (this is what connects to outputNode)
+        let mixerOutputFormat = engine.mainMixerNode.outputFormat(forBus: 0)
+        print("[AudioService] Mixer output format: \(mixerOutputFormat)")
+
         // Connect player -> main mixer with stereo format
         engine.connect(player, to: engine.mainMixerNode, format: stereoFormat)
+
+        // Explicitly connect main mixer to output node to ensure the chain is complete
+        // Use nil format to let the engine handle format conversion
+        engine.connect(engine.mainMixerNode, to: outputNode, format: nil)
+
+        // Ensure volumes are set correctly
+        player.volume = 1.0
+        engine.mainMixerNode.outputVolume = 1.0
+        print("[AudioService] Player volume: \(player.volume), Mixer volume: \(engine.mainMixerNode.outputVolume)")
 
         // Install input tap for receiving audio
         let inputNode = engine.inputNode
@@ -182,9 +197,15 @@ class AudioService: ObservableObject, @unchecked Sendable {
             throw AudioServiceError.engineNotRunning
         }
 
+        // Log current audio route before playing
+        let session = AVAudioSession.sharedInstance()
+        let route = session.currentRoute
+        print("[AudioService] Playing to output: \(route.outputs.map { "\($0.portName) (\($0.portType.rawValue))" })")
+
         // Convert buffer to engine format if needed
         let playableBuffer: AVAudioPCMBuffer
         if let format = playbackFormat, buffer.format != format {
+            print("[AudioService] Converting buffer from \(buffer.format) to \(format)")
             guard let converted = convertBuffer(buffer, to: format) else {
                 throw AudioServiceError.formatError
             }
@@ -193,6 +214,7 @@ class AudioService: ObservableObject, @unchecked Sendable {
             playableBuffer = buffer
         }
 
+        print("[AudioService] Playing \(playableBuffer.frameLength) frames, format: \(playableBuffer.format)")
         isPlaying = true
 
         // Use async continuation to wait for playback completion

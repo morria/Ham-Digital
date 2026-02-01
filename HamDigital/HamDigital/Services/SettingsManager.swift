@@ -107,6 +107,15 @@ class SettingsManager: NSObject, ObservableObject {
         didSet { save(rttySquelch, forKey: "rttySquelch") }
     }
 
+    // PSK31 Settings
+    @Published var psk31CenterFreq: Double {
+        didSet { save(psk31CenterFreq, forKey: "psk31CenterFreq") }
+    }
+
+    @Published var psk31Squelch: Double {
+        didSet { save(psk31Squelch, forKey: "psk31Squelch") }
+    }
+
     // Audio Settings
     /// Output gain multiplier (1.0 = 0dB, 2.0 = +6dB). Increase if VOX doesn't trigger.
     @Published var outputGain: Double {
@@ -152,6 +161,8 @@ class SettingsManager: NSObject, ObservableObject {
         self.rttyMarkFreq = Self.initialLoadDouble(forKey: "rttyMarkFreq", default: 2125.0)
         self.rttyShift = Self.initialLoadDouble(forKey: "rttyShift", default: 170.0)
         self.rttySquelch = Self.initialLoadDouble(forKey: "rttySquelch", default: 0.3)
+        self.psk31CenterFreq = Self.initialLoadDouble(forKey: "psk31CenterFreq", default: 1000.0)
+        self.psk31Squelch = Self.initialLoadDouble(forKey: "psk31Squelch", default: 0.3)
         self.outputGain = Self.initialLoadDouble(forKey: "outputGain", default: 1.0)
 
         super.init()
@@ -215,6 +226,8 @@ class SettingsManager: NSObject, ObservableObject {
             self.rttyMarkFreq = loadDouble(forKey: "rttyMarkFreq", default: 2125.0)
             self.rttyShift = loadDouble(forKey: "rttyShift", default: 170.0)
             self.rttySquelch = loadDouble(forKey: "rttySquelch", default: 0.3)
+            self.psk31CenterFreq = loadDouble(forKey: "psk31CenterFreq", default: 1000.0)
+            self.psk31Squelch = loadDouble(forKey: "psk31Squelch", default: 0.3)
             self.outputGain = loadDouble(forKey: "outputGain", default: 1.0)
         }
     }

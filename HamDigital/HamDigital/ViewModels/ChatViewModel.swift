@@ -10,11 +10,34 @@ import Combine
 @MainActor
 class ChatViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published var channels: [Channel] = []
-    @Published var selectedMode: DigitalMode = .rtty
+
+    /// Per-mode channel storage - each mode has its own independent channel list
+    @Published private var channelsByMode: [DigitalMode: [Channel]] = [:]
+
+    /// Computed property to access channels for the current mode
+    /// This is the primary interface for views to access channels
+    var channels: [Channel] {
+        get { channelsByMode[selectedMode] ?? [] }
+        set { channelsByMode[selectedMode] = newValue }
+    }
+
+    /// Get channels for a specific mode (used by ChannelListContainer)
+    func channels(for mode: DigitalMode) -> [Channel] {
+        channelsByMode[mode] ?? []
+    }
+
+    @Published var selectedMode: DigitalMode = .rtty {
+        didSet {
+            if oldValue != selectedMode {
+                modemService.setMode(selectedMode)
+                // Each mode has its own channel list via channelsByMode
+            }
+        }
+    }
     @Published var isTransmitting: Bool = false
     @Published var isListening: Bool = false
     @Published var audioError: String?
+    @Published var frequencyWarning: String?
 
     // MARK: - Services
     private let audioService: AudioService
@@ -23,16 +46,43 @@ class ChatViewModel: ObservableObject {
     // MARK: - Constants
     private let defaultComposeFrequency = 1500
 
+    /// Safe audio frequency range for USB transmission (Hz)
+    /// Below 300 Hz risks being filtered by radio, above 2700 Hz exceeds USB passband
+    static let minSafeFrequency = 400
+    static let maxSafeFrequency = 2600
+
     /// Timeout for grouping incoming messages (seconds)
     /// Only create a new received message after this much silence
     private let messageGroupTimeout: TimeInterval = 60.0
 
-    /// Last decode time per frequency (for detecting silence gaps)
-    private var lastDecodeTime: [Double: Date] = [:]
+    /// Per-mode decode tracking state
+    /// Each mode maintains its own decode state independently
 
-    /// Last time content was added to a received message per frequency
+    /// Last decode time per frequency per mode (for detecting silence gaps)
+    private var lastDecodeTimeByMode: [DigitalMode: [Double: Date]] = [:]
+
+    /// Last time content was added to a received message per frequency per mode
     /// Used to determine when to start a new message vs append
-    private var lastReceivedContentTime: [Double: Date] = [:]
+    private var lastReceivedContentTimeByMode: [DigitalMode: [Double: Date]] = [:]
+
+    /// Mode being used for current decoding buffer per frequency per mode
+    private var decodingModeByMode: [DigitalMode: [Double: DigitalMode]] = [:]
+
+    // Convenience accessors for current mode's decode state
+    private var lastDecodeTime: [Double: Date] {
+        get { lastDecodeTimeByMode[selectedMode] ?? [:] }
+        set { lastDecodeTimeByMode[selectedMode] = newValue }
+    }
+
+    private var lastReceivedContentTime: [Double: Date] {
+        get { lastReceivedContentTimeByMode[selectedMode] ?? [:] }
+        set { lastReceivedContentTimeByMode[selectedMode] = newValue }
+    }
+
+    private var decodingMode: [Double: DigitalMode] {
+        get { decodingModeByMode[selectedMode] ?? [:] }
+        set { decodingModeByMode[selectedMode] = newValue }
+    }
 
     /// Test audio processing state
     @Published var isProcessingTestAudio: Bool = false
@@ -71,17 +121,51 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Stop listening (audio input) - called when returning to mode selection
+    func stopListening() {
+        audioService.stop()
+        isListening = false
+        print("[ChatViewModel] Audio service stopped")
+    }
+
     // MARK: - Transmission State
     private var currentTransmissionChannelIndex: Int?
     private var currentTransmissionMessageIndex: Int?
 
     // MARK: - Public Methods
 
+    /// Check if a frequency is within safe USB passband for transmission
+    func isFrequencySafeForTransmission(_ frequency: Int) -> Bool {
+        return frequency >= Self.minSafeFrequency && frequency <= Self.maxSafeFrequency
+    }
+
+    /// Get a warning message if frequency is outside safe range
+    func frequencyWarningMessage(for frequency: Int) -> String? {
+        if frequency < Self.minSafeFrequency {
+            return "Frequency \(frequency) Hz is too low. Signal may be filtered by radio. Use \(Self.minSafeFrequency)+ Hz."
+        } else if frequency > Self.maxSafeFrequency {
+            return "Frequency \(frequency) Hz exceeds USB passband. Use below \(Self.maxSafeFrequency) Hz."
+        }
+        return nil
+    }
+
     func sendMessage(_ content: String, toChannel channel: Channel) {
         guard let index = channels.firstIndex(where: { $0.id == channel.id }) else { return }
 
+        // Validate frequency is within safe transmission range
+        let freq = channels[index].frequency
+        if let warning = frequencyWarningMessage(for: freq) {
+            frequencyWarning = warning
+            print("[ChatViewModel] Blocked transmission: \(warning)")
+            return
+        }
+        frequencyWarning = nil
+
+        // RTTY is uppercase-only (Baudot limitation), PSK-31 preserves case
+        let messageContent = selectedMode == .rtty ? content.uppercased() : content
+
         let message = Message(
-            content: content.uppercased(),
+            content: messageContent,
             direction: .sent,
             mode: selectedMode,
             callsign: Station.myStation.callsign,
@@ -127,6 +211,22 @@ class ChatViewModel: ObservableObject {
 
     func deleteChannel(_ channel: Channel) {
         channels.removeAll { $0.id == channel.id }
+    }
+
+    /// Clear all channels and reset decode state for the current mode
+    func clearAllChannels() {
+        channelsByMode[selectedMode] = []
+        lastDecodeTimeByMode[selectedMode] = [:]
+        lastReceivedContentTimeByMode[selectedMode] = [:]
+        decodingModeByMode[selectedMode] = [:]
+    }
+
+    /// Clear channels for a specific mode
+    func clearChannels(for mode: DigitalMode) {
+        channelsByMode[mode] = []
+        lastDecodeTimeByMode[mode] = [:]
+        lastReceivedContentTimeByMode[mode] = [:]
+        decodingModeByMode[mode] = [:]
     }
 
     // MARK: - Test Audio Processing
@@ -177,9 +277,11 @@ class ChatViewModel: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(Int(chunkDuration * 1000 * 0.1)))  // 10x speed
             }
 
-            // Flush any remaining buffered content
-            for frequency in lastDecodeTime.keys {
-                flushDecodedBuffer(for: frequency)
+            // Flush any remaining buffered content for all modes
+            for (mode, decodeTimeDict) in lastDecodeTimeByMode {
+                for frequency in decodeTimeDict.keys {
+                    flushDecodedBuffer(for: frequency, mode: mode)
+                }
             }
 
             isProcessingTestAudio = false
@@ -270,10 +372,12 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Channel Management for RX
 
-    /// Get or create a channel at the given frequency
-    private func getOrCreateChannel(at frequency: Double) -> Int {
+    /// Get or create a channel at the given frequency for a specific mode
+    private func getOrCreateChannel(at frequency: Double, for mode: DigitalMode) -> Int {
+        var modeChannels = channelsByMode[mode] ?? []
+
         // Find existing channel within ±10 Hz
-        if let index = channels.firstIndex(where: { abs($0.frequency - Int(frequency)) < 10 }) {
+        if let index = modeChannels.firstIndex(where: { abs($0.frequency - Int(frequency)) < 10 }) {
             return index
         }
 
@@ -284,15 +388,20 @@ class ChatViewModel: ObservableObject {
             messages: [],
             lastActivity: Date()
         )
-        channels.append(newChannel)
-        return channels.count - 1
+        modeChannels.append(newChannel)
+        channelsByMode[mode] = modeChannels
+        return modeChannels.count - 1
     }
 
-    /// Flush accumulated decoded text to a message
+    /// Flush accumulated decoded text to a message for a specific mode
     /// Appends to the last received message if within timeout and no sent message since
-    private func flushDecodedBuffer(for frequency: Double) {
-        let channelIndex = getOrCreateChannel(at: frequency)
-        let text = channels[channelIndex].decodingBuffer
+    private func flushDecodedBuffer(for frequency: Double, mode: DigitalMode) {
+        let channelIndex = getOrCreateChannel(at: frequency, for: mode)
+        var modeChannels = channelsByMode[mode] ?? []
+
+        guard channelIndex < modeChannels.count else { return }
+
+        let text = modeChannels[channelIndex].decodingBuffer
 
         guard !text.isEmpty else { return }
 
@@ -300,54 +409,73 @@ class ChatViewModel: ObservableObject {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: .controlCharacters)
         guard !trimmedText.isEmpty else {
-            channels[channelIndex].decodingBuffer = ""
+            modeChannels[channelIndex].decodingBuffer = ""
+            channelsByMode[mode] = modeChannels
             return
         }
 
         let now = Date()
 
+        // Get mode-specific tracking data
+        let modeLastReceivedContentTime = lastReceivedContentTimeByMode[mode] ?? [:]
+        var modeDecodingMode = decodingModeByMode[mode] ?? [:]
+
         // Check if we can append to the last received message:
         // - Last message must be received (not sent by user)
         // - Must be within the timeout since last received content
         let canAppend: Bool
-        if let lastMessageIndex = channels[channelIndex].messages.indices.last,
-           channels[channelIndex].messages[lastMessageIndex].direction == .received {
+        if let lastMessageIndex = modeChannels[channelIndex].messages.indices.last,
+           modeChannels[channelIndex].messages[lastMessageIndex].direction == .received {
             // Check time since last content was added (not message creation time)
-            if let lastContentTime = lastReceivedContentTime[frequency] {
+            if let lastContentTime = modeLastReceivedContentTime[frequency] {
                 canAppend = now.timeIntervalSince(lastContentTime) < messageGroupTimeout
             } else {
                 // No previous content time, use message timestamp as fallback
-                canAppend = now.timeIntervalSince(channels[channelIndex].messages[lastMessageIndex].timestamp) < messageGroupTimeout
+                canAppend = now.timeIntervalSince(modeChannels[channelIndex].messages[lastMessageIndex].timestamp) < messageGroupTimeout
             }
         } else {
             canAppend = false
         }
 
+        // Use the mode that was active during decoding
+        let messageMode = modeDecodingMode[frequency] ?? mode
+
         if canAppend,
-           let lastMessageIndex = channels[channelIndex].messages.indices.last {
+           let lastMessageIndex = modeChannels[channelIndex].messages.indices.last {
             // Append to existing received message
-            channels[channelIndex].messages[lastMessageIndex].content += trimmedText
-            print("[ChatViewModel] RX appended on \(Int(frequency)) Hz: \(trimmedText)")
+            modeChannels[channelIndex].messages[lastMessageIndex].content += trimmedText
+            print("[ChatViewModel] RX appended on \(Int(frequency)) Hz (\(messageMode.rawValue)): \(trimmedText)")
         } else {
             // Create new received message
             let message = Message(
                 content: trimmedText,
                 direction: .received,
-                mode: selectedMode,
+                mode: messageMode,
                 callsign: nil,  // TODO: Extract callsign from text
                 transmitState: nil
             )
-            channels[channelIndex].messages.append(message)
-            print("[ChatViewModel] RX message on \(Int(frequency)) Hz: \(trimmedText)")
+            modeChannels[channelIndex].messages.append(message)
+            print("[ChatViewModel] RX message on \(Int(frequency)) Hz (\(messageMode.rawValue)): \(trimmedText)")
         }
 
+        // Clear the decoding mode after flushing
+        modeDecodingMode[frequency] = nil
+        decodingModeByMode[mode] = modeDecodingMode
+
         // Track when content was last added
-        lastReceivedContentTime[frequency] = now
-        channels[channelIndex].lastActivity = now
+        var updatedLastReceivedContentTime = lastReceivedContentTimeByMode[mode] ?? [:]
+        updatedLastReceivedContentTime[frequency] = now
+        lastReceivedContentTimeByMode[mode] = updatedLastReceivedContentTime
+
+        modeChannels[channelIndex].lastActivity = now
 
         // Clear buffer
-        channels[channelIndex].decodingBuffer = ""
-        lastDecodeTime[frequency] = nil
+        modeChannels[channelIndex].decodingBuffer = ""
+        channelsByMode[mode] = modeChannels
+
+        var modeLastDecodeTime = lastDecodeTimeByMode[mode] ?? [:]
+        modeLastDecodeTime[frequency] = nil
+        lastDecodeTimeByMode[mode] = modeLastDecodeTime
     }
 }
 
@@ -357,42 +485,70 @@ extension ChatViewModel: ModemServiceDelegate {
     nonisolated func modemService(
         _ service: ModemService,
         didDecode character: Character,
-        onChannel frequency: Double
+        onChannel frequency: Double,
+        mode: DigitalMode
     ) {
         Task { @MainActor in
-            handleDecodedCharacter(character, onChannel: frequency)
+            handleDecodedCharacter(character, onChannel: frequency, mode: mode)
         }
     }
 
     nonisolated func modemService(
         _ service: ModemService,
         signalDetected: Bool,
-        onChannel frequency: Double
+        onChannel frequency: Double,
+        mode: DigitalMode
     ) {
         Task { @MainActor in
             // When signal is lost, flush any buffered content
             if !signalDetected {
-                flushDecodedBuffer(for: frequency)
+                flushDecodedBuffer(for: frequency, mode: mode)
             }
         }
     }
 
     /// Handle decoded character on main actor
-    private func handleDecodedCharacter(_ character: Character, onChannel frequency: Double) {
-        let channelIndex = getOrCreateChannel(at: frequency)
+    /// The mode parameter specifies which decoder produced this character
+    private func handleDecodedCharacter(_ character: Character, onChannel frequency: Double, mode: DigitalMode) {
+        let channelIndex = getOrCreateChannel(at: frequency, for: mode)
         let now = Date()
 
-        // Check if we should flush previous content (long silence)
-        if let lastTime = lastDecodeTime[frequency],
+        // Get mode-specific tracking data
+        let modeLastDecodeTime = lastDecodeTimeByMode[mode] ?? [:]
+        let modeDecodingMode = decodingModeByMode[mode] ?? [:]
+
+        // Check if we should flush previous content (long silence or mode change)
+        let shouldFlush: Bool
+        if let lastTime = modeLastDecodeTime[frequency],
            now.timeIntervalSince(lastTime) > messageGroupTimeout {
-            // Flush old buffer first using shared logic
-            flushDecodedBuffer(for: frequency)
+            shouldFlush = true
+        } else if let currentMode = modeDecodingMode[frequency], currentMode != mode {
+            // Mode changed - flush previous content
+            shouldFlush = true
+        } else {
+            shouldFlush = false
         }
 
-        // Accumulate character in channel's decoding buffer
-        channels[channelIndex].decodingBuffer.append(character)
+        if shouldFlush {
+            flushDecodedBuffer(for: frequency, mode: mode)
+        }
 
-        lastDecodeTime[frequency] = now
-        channels[channelIndex].lastActivity = now
+        // Track the mode for this decoding session
+        var updatedDecodingMode = decodingModeByMode[mode] ?? [:]
+        updatedDecodingMode[frequency] = mode
+        decodingModeByMode[mode] = updatedDecodingMode
+
+        // Accumulate character in mode's channel decoding buffer
+        var modeChannels = channelsByMode[mode] ?? []
+        if channelIndex < modeChannels.count {
+            modeChannels[channelIndex].decodingBuffer.append(character)
+            modeChannels[channelIndex].lastActivity = now
+            channelsByMode[mode] = modeChannels
+        }
+
+        // Update last decode time
+        var updatedLastDecodeTime = lastDecodeTimeByMode[mode] ?? [:]
+        updatedLastDecodeTime[frequency] = now
+        lastDecodeTimeByMode[mode] = updatedLastDecodeTime
     }
 }

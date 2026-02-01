@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 enum DigitalMode: String, CaseIterable, Identifiable {
     case rtty = "RTTY"
@@ -17,29 +18,40 @@ enum DigitalMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .rtty: return "RTTY (45.45 Baud)"
+        case .rtty: return "RTTY"
         case .psk31: return "PSK31"
         case .bpsk63: return "BPSK63"
         case .qpsk31: return "QPSK31"
         case .qpsk63: return "QPSK63"
-        case .olivia: return "Olivia 8/250"
+        case .olivia: return "Olivia"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .rtty: return "45.45 Baud"
+        case .psk31: return "31.25 Baud"
+        case .bpsk63: return "62.5 Baud"
+        case .qpsk31: return "31.25 Baud"
+        case .qpsk63: return "62.5 Baud"
+        case .olivia: return "8/250"
         }
     }
 
     var description: String {
         switch self {
         case .rtty:
-            return "Radio Teletype - Classic 5-bit Baudot code"
+            return "Classic radio teletype using 5-bit Baudot code. Robust and widely used."
         case .psk31:
-            return "Phase Shift Keying - Keyboard-to-keyboard QSOs"
+            return "Narrowband PSK for keyboard-to-keyboard chats. Very efficient."
         case .bpsk63:
-            return "BPSK at 62.5 baud - 2x speed of PSK31"
+            return "Faster PSK mode at 2x speed. Good for stronger signals."
         case .qpsk31:
-            return "Quadrature PSK - 2x throughput of PSK31"
+            return "Four-phase PSK with 2x throughput. Better for good conditions."
         case .qpsk63:
-            return "Quadrature PSK at 62.5 baud - 4x throughput"
+            return "Fastest PSK variant at 4x throughput. Best signal required."
         case .olivia:
-            return "Olivia MFSK - Excellent weak signal performance"
+            return "Multi-tone MFSK with excellent weak signal performance."
         }
     }
 
@@ -61,6 +73,36 @@ enum DigitalMode: String, CaseIterable, Identifiable {
             return true
         case .rtty, .olivia:
             return false
+        }
+    }
+
+    /// SF Symbol icon for the mode
+    var iconName: String {
+        switch self {
+        case .rtty:
+            return "teletype"
+        case .psk31, .bpsk63, .qpsk31, .qpsk63:
+            return "waveform.path"
+        case .olivia:
+            return "waveform"
+        }
+    }
+
+    /// Color associated with the mode
+    var color: Color {
+        switch self {
+        case .rtty:
+            return .orange
+        case .psk31:
+            return .blue
+        case .bpsk63:
+            return .cyan
+        case .qpsk31:
+            return .purple
+        case .qpsk63:
+            return .indigo
+        case .olivia:
+            return .green
         }
     }
 }

@@ -187,26 +187,47 @@ class ModemService: ObservableObject {
         print("[ModemService] Mode changed to \(mode.rawValue)")
 
         #if canImport(HamDigitalCore)
-        // Update channel frequencies based on mode
+        // First, reset ALL modems to ensure clean state when switching modes
+        // This prevents any lingering state from the previous mode
+        resetAllModems()
+
+        // Now configure the active mode
         switch mode {
         case .rtty:
+            // RTTY uses the existing modem, just update channel frequencies
             channelFrequencies = multiChannelDemodulator?.channels.map { $0.frequency } ?? []
-            rttyModem?.reset()
-            multiChannelDemodulator?.reset()
+
         case .psk31, .bpsk63, .qpsk31, .qpsk63:
-            // Reconfigure PSK modem for the new mode
+            // Create new PSK modem with the correct configuration for this variant
             pskModem = PSKModem(configuration: currentPSKConfiguration)
             pskModem?.delegate = self
-            // Recreate multi-channel demodulator with new configuration
+            // Create new multi-channel demodulator with correct configuration
             multiChannelPSKDemodulator = MultiChannelPSKDemodulator.standardSubband(configuration: currentPSKConfiguration)
             multiChannelPSKDemodulator?.delegate = self
             multiChannelPSKDemodulator?.setSquelch(Float(settings.psk31Squelch))
             channelFrequencies = multiChannelPSKDemodulator?.channels.map { $0.frequency } ?? []
+
         case .olivia:
             // Not yet implemented
-            break
+            channelFrequencies = []
         }
         #endif
+    }
+
+    /// Reset all modems to clean state
+    private func resetAllModems() {
+        #if canImport(HamDigitalCore)
+        // Reset RTTY modems
+        rttyModem?.reset()
+        multiChannelDemodulator?.reset()
+
+        // Reset PSK modems - setting to nil releases resources
+        pskModem?.reset()
+        multiChannelPSKDemodulator?.reset()
+        #endif
+
+        signalStrength = 0
+        isDecoding = false
     }
 
     // MARK: - Decoding (RX)
@@ -388,16 +409,9 @@ class ModemService: ObservableObject {
 
     // MARK: - Control
 
-    /// Reset modem state
+    /// Reset modem state for current mode
     func reset() {
-        #if canImport(HamDigitalCore)
-        rttyModem?.reset()
-        multiChannelDemodulator?.reset()
-        pskModem?.reset()
-        multiChannelPSKDemodulator?.reset()
-        #endif
-        signalStrength = 0
-        isDecoding = false
+        resetAllModems()
     }
 
     // MARK: - Private Helpers

@@ -31,11 +31,13 @@
 		A10000000000000000000023 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* SettingsManager.swift */; };
 		A10000000000000000000024 /* ModeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* ModeConfig.swift */; };
 		A10000000000000000000026 /* TestAudioLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* TestAudioLoader.swift */; };
+		A10000000000000000000027 /* ModeSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* ModeSelectionView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* HamDigitalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HamDigitalApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* ModeSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelectionView.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* DigitalMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalMode.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Station.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Station.swift; sourceTree = "<group>"; };
@@ -137,6 +139,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000002 /* ContentView.swift */,
+				A20000000000000000000027 /* ModeSelectionView.swift */,
 				A50000000000000000000014 /* Channels */,
 				A50000000000000000000011 /* Chat */,
 				A50000000000000000000012 /* Components */,
@@ -301,6 +304,7 @@
 			files = (
 				A10000000000000000000001 /* HamDigitalApp.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
+				A10000000000000000000027 /* ModeSelectionView.swift in Sources */,
 				A10000000000000000000003 /* Message.swift in Sources */,
 				A10000000000000000000004 /* DigitalMode.swift in Sources */,
 				A10000000000000000000005 /* Station.swift in Sources */,

@@ -139,20 +139,118 @@ func generateMultiChannelTest() throws {
     print()
 }
 
+// MARK: - PSK31 Single Channel Test
+
+func generatePSK31SingleChannelTest() throws {
+    print("=== Single Channel PSK31 Test ===")
+
+    let config = PSK31Configuration.standard
+    var modulator = PSK31Modulator(configuration: config)
+
+    let message = "cq cq cq de W1AW W1AW W1AW pse k"
+
+    print("Configuration: \(config)")
+    print("Message: \(message)")
+
+    let samples = modulator.modulateTextWithEnvelope(
+        message,
+        preambleMs: 500,
+        postambleMs: 200
+    )
+
+    print("Generated \(samples.count) samples (\(String(format: "%.2f", Double(samples.count) / config.sampleRate)) seconds)")
+
+    let outputPath = "/tmp/psk31_single_channel.wav"
+    try writeWAV(samples: samples, sampleRate: config.sampleRate, to: outputPath)
+    print("Written to: \(outputPath)")
+    print()
+}
+
+// MARK: - PSK31 Multi-Channel Test
+
+func generatePSK31MultiChannelTest() throws {
+    print("=== Multi-Channel PSK31 Test (4 channels) ===")
+
+    // Four different stations at different frequencies (50 Hz spacing for PSK31)
+    let channels: [(freq: Double, callsign: String, message: String)] = [
+        (900, "W1AW", "cq cq cq de W1AW W1AW W1AW k"),
+        (1000, "K5ABC", "cq contest de K5ABC K5ABC k"),
+        (1100, "N0XYZ", "qso de N0XYZ N0XYZ pse k"),
+        (1200, "VE3TEST", "cq dx de VE3TEST VE3TEST k")
+    ]
+
+    let sampleRate = 48000.0
+    var maxLength = 0
+    var channelSamples: [[Float]] = []
+
+    for (freq, callsign, message) in channels {
+        let config = PSK31Configuration(
+            centerFrequency: freq,
+            sampleRate: sampleRate
+        )
+        var modulator = PSK31Modulator(configuration: config)
+
+        // Add some random delay (0-500ms) to make channels start at different times
+        let delaySamples = Int(Double.random(in: 0...0.5) * sampleRate)
+        var samples = [Float](repeating: 0, count: delaySamples)
+
+        samples.append(contentsOf: modulator.modulateTextWithEnvelope(
+            message,
+            preambleMs: 200,
+            postambleMs: 100
+        ))
+
+        print("Channel \(Int(freq)) Hz (\(callsign)): \(samples.count) samples")
+        channelSamples.append(samples)
+        maxLength = max(maxLength, samples.count)
+    }
+
+    // Mix all channels together
+    var mixed = [Float](repeating: 0, count: maxLength)
+    for channel in channelSamples {
+        for (i, sample) in channel.enumerated() {
+            mixed[i] += sample * 0.25  // Scale down to prevent clipping
+        }
+    }
+
+    print("Mixed audio: \(mixed.count) samples (\(String(format: "%.2f", Double(mixed.count) / sampleRate)) seconds)")
+
+    let outputPath = "/tmp/psk31_multi_channel.wav"
+    try writeWAV(samples: mixed, sampleRate: sampleRate, to: outputPath)
+    print("Written to: \(outputPath)")
+    print()
+    print("Channels:")
+    for (freq, callsign, _) in channels {
+        print("  - \(Int(freq)) Hz: \(callsign)")
+    }
+    print()
+}
+
 // MARK: - Main
 
 do {
+    // RTTY tests
     try generateSingleChannelTest()
     try generateMultiChannelTest()
 
+    // PSK31 tests
+    try generatePSK31SingleChannelTest()
+    try generatePSK31MultiChannelTest()
+
     print("=== Playback Instructions ===")
-    print("Play single channel:  afplay /tmp/rtty_single_channel.wav")
-    print("Play multi-channel:   afplay /tmp/rtty_multi_channel.wav")
+    print()
+    print("RTTY:")
+    print("  Play single channel:  afplay /tmp/rtty_single_channel.wav")
+    print("  Play multi-channel:   afplay /tmp/rtty_multi_channel.wav")
+    print()
+    print("PSK31:")
+    print("  Play single channel:  afplay /tmp/psk31_single_channel.wav")
+    print("  Play multi-channel:   afplay /tmp/psk31_multi_channel.wav")
     print()
     print("To test with your phone:")
     print("1. Play the WAV file on your computer")
     print("2. Hold your phone near the speaker")
-    print("3. The app should decode the RTTY signal")
+    print("3. The app should decode the signal")
 } catch {
     print("Error: \(error)")
     exit(1)
