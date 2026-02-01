@@ -2,9 +2,14 @@
 
 An iOS app that provides an iMessage-like interface for amateur radio digital modes (RTTY, PSK31, Olivia) using an external USB audio interface.
 
-## Current Status: Functional Prototype
+## Current Status: Functional RTTY
 
-The app has a working UI with real audio transmission support. Ham Digital can generate and play RTTY audio signals through the device output. Reception (decoding) is not yet implemented.
+The app supports full RTTY transmit and receive:
+- **TX**: Type a message, tap send, and audio is generated and played through your device
+- **RX**: The app continuously listens for RTTY signals and decodes them into messages
+- **Multi-channel**: Monitors 8 frequencies simultaneously (1200-2600 Hz)
+- **Squelch**: Adjustable squelch filters noise-induced false decodes
+- **Debug mode**: Test decoding pipeline with WAV files (no radio needed)
 
 ## Getting Started
 
@@ -29,12 +34,36 @@ cd DigiModes/DigiModesCore
 swift build
 ```
 
-Tests require Xcode (XCTest isn't available in command line tools):
+Tests can be run from the command line:
 ```bash
-# In Xcode: Product → Test (⌘U)
-# Or use xcodebuild if Xcode is installed
-xcodebuild test -scheme DigiModesCore -destination 'platform=macOS'
+cd DigiModes/DigiModesCore && swift test
 ```
+
+### Testing with Audio Files
+
+Generate test RTTY audio files:
+
+```bash
+cd DigiModes/DigiModesCore
+swift run GenerateTestAudio
+# Creates: /tmp/rtty_single_channel.wav (2125 Hz)
+#          /tmp/rtty_multi_channel.wav (4 channels: 1500, 1700, 1900, 2100 Hz)
+```
+
+**Option 1: In-app Debug Mode (Recommended)**
+
+1. Run the app in iOS Simulator
+2. Go to Settings → Debug section
+3. Tap "Play" on a test file to process it through the decoder
+4. Decoded messages appear in the channel list
+
+**Option 2: Over-the-air (requires audio hardware)**
+
+```bash
+afplay /tmp/rtty_single_channel.wav      # Play while app listens via mic
+```
+
+**Tip:** If decoding seems unreliable, lower the squelch in Settings → RTTY Settings.
 
 ---
 
@@ -56,23 +85,28 @@ xcodebuild test -scheme DigiModesCore -destination 'platform=macOS'
 - [x] AVAudioEngine setup for USB audio devices
 - [x] Output buffer management for transmission
 - [x] Sample rate handling (48kHz default)
-- [ ] Input tap for reception
+- [x] Input tap for reception with mono conversion
 
-### Phase 3: RTTY Implementation (Partial)
+### Phase 3: RTTY Implementation ✅
 
 - [x] Baudot (ITA2) encoding/decoding tables
 - [x] FSK modulation (tone generation) - via DigiModesCore
 - [x] Bit timing for transmission
-- [ ] FSK demodulation (tone detection)
-- [ ] Mark/Space frequency configuration UI
-- [ ] Shift detection (170Hz, 425Hz, 850Hz)
+- [x] FSK demodulation (tone detection)
+- [x] Multi-channel simultaneous decoding (8 channels)
+- [x] Mark/Space frequency configuration in Settings
+- [x] Configurable baud rate and shift
 
-### Phase 4: Message Handling (Partial)
+### Phase 4: Message Handling ✅
 
 - [x] TX queue management with transmit states
 - [x] Visual feedback (queued/transmitting/sent/failed)
-- [x] Compose button for new messages
-- [ ] Character-by-character RX display
+- [x] Compose button (bottom right, iMessage-style)
+- [x] Stop transmission button
+- [x] RX message display with auto-channel creation
+- [x] Persistent settings via iCloud
+- [x] Adjustable squelch to filter noise
+- [x] Debug mode for testing with WAV files
 - [ ] PTT control (via audio VOX)
 - [ ] Message macros/templates
 
@@ -92,7 +126,7 @@ xcodebuild test -scheme DigiModesCore -destination 'platform=macOS'
 
 ### Phase 7: Polish
 
-- [ ] Persistent settings (UserDefaults/SwiftData)
+- [x] Persistent settings (iCloud Key-Value Store + UserDefaults fallback)
 - [ ] QSO log export (ADIF format)
 - [ ] Dark mode optimization
 - [ ] iPad layout support
@@ -135,20 +169,24 @@ DigiModes/
 ├── DigiModes/                  # iOS app source
 │   ├── App/
 │   │   └── HamDigitalApp.swift
-│   ├── Models/                 # App-specific models
+│   ├── Models/                 # Channel, Message, DigitalMode, Station
 │   ├── Views/
 │   │   ├── ContentView.swift
-│   │   ├── Chat/
-│   │   ├── Components/
-│   │   └── Settings/
-│   ├── ViewModels/
-│   └── Services/
+│   │   ├── Channels/           # ChannelListView, ChannelDetailView, ChannelRowView
+│   │   ├── Chat/               # MessageBubbleView
+│   │   ├── Components/         # ModePickerView
+│   │   └── Settings/           # SettingsView
+│   ├── ViewModels/             # ChatViewModel
+│   ├── Services/               # AudioService, ModemService, SettingsManager, TestAudioLoader
+│   └── Config/                 # ModeConfig
 └── DigiModesCore/              # Swift Package (CLI buildable)
     ├── Package.swift
-    ├── Sources/DigiModesCore/
-    │   ├── Models/             # Message, DigitalMode, Station
-    │   ├── Codecs/             # BaudotCodec (RTTY)
-    │   └── Constants.swift
+    ├── Sources/
+    │   ├── DigiModesCore/
+    │   │   ├── Models/         # RTTYConfiguration, RTTYChannel
+    │   │   ├── Codecs/         # BaudotCodec
+    │   │   └── Modems/         # RTTYModem, FSKDemodulator, MultiChannelRTTYDemodulator
+    │   └── GenerateTestAudio/  # CLI tool for test audio files
     └── Tests/DigiModesCoreTests/
 ```
 

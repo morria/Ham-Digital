@@ -10,15 +10,18 @@ Ham Digital is an iOS app for amateur radio digital modes (RTTY, PSK31, Olivia) 
 # Build Swift Package (DigiModesCore)
 cd DigiModes/DigiModesCore && swift build
 
+# Run DigiModesCore tests
+cd DigiModes/DigiModesCore && swift test
+
 # Build iOS app (requires Xcode)
-/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
-  -project DigiModes/DigiModes.xcodeproj \
+xcodebuild -project DigiModes/DigiModes.xcodeproj \
   -scheme DigiModes \
-  -destination 'id=5112B080-58D8-4BC7-8AB0-BB34ED2095F6' \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   build
 
-# Run tests (requires Xcode, not just command line tools)
-cd DigiModes/DigiModesCore && swift test
+# Generate RTTY test audio files
+cd DigiModes/DigiModesCore && swift run GenerateTestAudio
+# Outputs: /tmp/rtty_single_channel.wav, /tmp/rtty_multi_channel.wav
 ```
 
 ## Architecture
@@ -32,6 +35,7 @@ cd DigiModes/DigiModesCore && swift test
 - Messages-style two-level navigation: Channel List → Channel Detail
 - Ham radio conventions: uppercase text, callsigns, RST reports
 - Channel = detected signal on a frequency, may have multiple participants
+- Settings persist via iCloud Key-Value Store (NSUbiquitousKeyValueStore)
 
 ### File Organization
 
@@ -41,75 +45,76 @@ DigiModes/
 │   ├── Models/                   # Channel, Message, DigitalMode, Station
 │   ├── Views/
 │   │   ├── Channels/             # ChannelListView, ChannelDetailView, ChannelRowView
-│   │   ├── Chat/                 # MessageBubbleView (deprecated: ChatView, MessageListView, MessageInputView)
+│   │   ├── Chat/                 # MessageBubbleView
 │   │   ├── Components/           # ModePickerView
 │   │   └── Settings/             # SettingsView with AudioMeterView
 │   ├── ViewModels/               # ChatViewModel
-│   └── Services/                 # AudioService (real audio), ModemService (bridges to DigiModesCore)
+│   ├── Services/                 # AudioService, ModemService, SettingsManager
+│   └── Config/                   # ModeConfig (enable/disable modes)
 │
 └── DigiModesCore/                # Swift Package
-    ├── Sources/DigiModesCore/
-    │   ├── Models/               # Same models, with `public` access
-    │   └── Codecs/               # BaudotCodec (RTTY)
+    ├── Sources/
+    │   ├── DigiModesCore/        # Library
+    │   │   ├── Models/           # RTTYConfiguration, RTTYChannel
+    │   │   ├── Codecs/           # BaudotCodec
+    │   │   └── Modems/           # RTTYModem, FSKDemodulator, MultiChannelRTTYDemodulator
+    │   └── GenerateTestAudio/    # CLI tool to generate test WAV files
     └── Tests/
 ```
 
 ## Current State
 
 ### Completed
-- UI skeleton with channel-based navigation
-- Baudot/ITA2 codec with LTRS/FIGS shift handling
-- Sample data for development (3 mock channels)
-- Swipe-to-reveal timestamps gesture
-- Channel list shows frequency offset from 1500 Hz center
-- Compose button to create new transmissions
-- Message transmit states (queued → transmitting → sent/failed)
-- Visual feedback with color-coded bubbles and status indicators
-- AudioService with AVAudioEngine for real audio output
-- Integration with ModemService for RTTY encoding
-
-### Next Steps (RTTY Implementation)
-1. **Audio capture** - Install input tap on AVAudioEngine for RX audio
-2. **FSK demodulation** - Route input samples to MultiChannelRTTYDemodulator
-3. **Channel detection** - Create Channel objects from detected signals
-4. **Real-time decode display** - Show characters as they're decoded
+- Full RTTY TX: encode text → FSK audio → play through device
+- Full RTTY RX: audio input tap → multi-channel demodulator → decoded text
+- iMessage-style channel navigation with compose button (bottom right)
+- Message transmit states with visual feedback (queued/transmitting/sent/failed)
+- Stop button cancels in-progress transmissions
+- Persistent settings via iCloud (baud rate, mark freq, shift)
+- Swipe-to-reveal timestamps
+- "Listening..." empty state when monitoring for signals
 
 ### Key Implementation Details
 
+**Audio Pipeline**
+- `AudioService`: AVAudioEngine with input tap and player node
+- `onAudioInput` callback routes samples to ModemService
+- `ModemService`: bridges to DigiModesCore's MultiChannelRTTYDemodulator
+- Decoded characters delivered via `ModemServiceDelegate`
+
 **Message TransmitState**
-- `.queued` - Gray bubble, clock icon - message waiting in queue
-- `.transmitting` - Orange bubble, spinner - audio being played
-- `.sent` - Blue bubble, checkmark - transmission complete
-- `.failed` - Red bubble, warning icon - transmission error
+- `.queued` - Gray bubble - message waiting in queue
+- `.transmitting` - Orange bubble - audio being played
+- `.sent` - Blue bubble - transmission complete
+- `.failed` - Red bubble - transmission error or cancelled
 
-**AudioService**
-- Uses AVAudioPlayerNode for playback
-- Async `playBuffer()` method waits for completion
-- Falls back to simulated delay if modem unavailable
-- Handles sample rate conversion automatically
+**Settings (SettingsManager)**
+- Callsign, grid locator, RTTY baud rate, mark frequency, shift
+- Synced via NSUbiquitousKeyValueStore (iCloud)
+- Falls back to UserDefaults if iCloud unavailable
 
-**Frequency Offset Display**
-- Channel list shows offset from 1500 Hz center (e.g., "+125 Hz", "-50 Hz")
-- Matches typical waterfall display conventions
+**Multi-Channel Decoding**
+- `MultiChannelRTTYDemodulator` monitors 8 frequencies (1200-2600 Hz, 200 Hz spacing)
+- Each channel has independent FSK demodulator
+- Characters grouped into messages with 2-second timeout
 
 ### Technical Notes
 
-**RTTY Parameters (standard)**
-- Baud rate: 45.45 baud (22ms per bit)
-- Shift: 170 Hz (mark=2125 Hz, space=2295 Hz)
-- 5 bits per character (Baudot/ITA2)
-- 1 start bit, 1.5 stop bits
+**RTTY Parameters (configurable)**
+- Baud rate: 45.45 baud (default), also 50, 75, 100
+- Shift: 170 Hz (default)
+- Mark frequency: 2125 Hz (default)
+- Sample rate: 48000 Hz
 
 **Baudot Codec**
 - `BaudotCodec.encode(String) -> [UInt8]` - Text to 5-bit codes
 - `BaudotCodec.decode([UInt8]) -> String` - 5-bit codes to text
 - Handles LTRS (0x1F) and FIGS (0x1B) shift codes automatically
 
-**iOS Audio Considerations**
-- Need `NSMicrophoneUsageDescription` in Info.plist (already added)
-- External soundcard appears as standard audio device
-- Use AVAudioSession category `.playAndRecord` with `.allowBluetooth` option
-- Sample rate: 48000 Hz typical for USB audio
+**iOS Audio**
+- `AVAudioSession.Category.playAndRecord` with `.allowBluetoothA2DP`
+- Input tap: 4096 sample buffer, converts stereo to mono
+- nonisolated input handler for Sendable compliance
 
 ## Conventions
 

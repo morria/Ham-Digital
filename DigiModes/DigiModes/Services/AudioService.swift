@@ -6,17 +6,22 @@
 //
 
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
+
+/// Callback for receiving audio input samples
+typealias AudioInputCallback = ([Float]) -> Void
 
 /// AudioService handles connection to external USB audio interfaces
 /// and provides audio I/O for digital mode encoding/decoding.
-class AudioService: ObservableObject {
+/// Marked @unchecked Sendable as we handle thread safety via DispatchQueue.main.
+class AudioService: ObservableObject, @unchecked Sendable {
     // MARK: - Published Properties
     @Published var isConnected: Bool = false
     @Published var inputDeviceName: String = "None"
     @Published var outputDeviceName: String = "None"
     @Published var sampleRate: Double = 48000.0
     @Published var isPlaying: Bool = false
+    @Published var isListening: Bool = false
 
     // MARK: - Audio Engine
     private var audioEngine: AVAudioEngine?
@@ -27,6 +32,9 @@ class AudioService: ObservableObject {
 
     /// Continuation for async playback completion
     private var playbackContinuation: CheckedContinuation<Void, Error>?
+
+    /// Callback for audio input samples
+    var onAudioInput: AudioInputCallback?
 
     // MARK: - Initialization
     init() {
@@ -43,7 +51,7 @@ class AudioService: ObservableObject {
     func start() async throws {
         // Configure audio session
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try session.setActive(true)
 
         // Create audio engine
@@ -73,23 +81,72 @@ class AudioService: ObservableObject {
         // Connect player -> main mixer
         engine.connect(player, to: engine.mainMixerNode, format: monoFormat)
 
+        // Install input tap for receiving audio
+        let inputNode = engine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+
+        // Install tap to capture audio input
+        // Capture callback reference to avoid Sendable warning on self
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+            guard let self = self else { return }
+            self.handleInputBuffer(buffer)
+        }
+
         // Start the engine
         try engine.start()
 
         isConnected = true
+        isListening = true
         updateDeviceNames()
 
-        print("[AudioService] Started with sample rate: \(sampleRate) Hz")
+        print("[AudioService] Started with sample rate: \(sampleRate) Hz, listening for input")
+    }
+
+    /// Handle audio input from tap (nonisolated to satisfy Sendable requirement)
+    private nonisolated func handleInputBuffer(_ buffer: AVAudioPCMBuffer) {
+        // Convert to mono Float array
+        guard let channelData = buffer.floatChannelData else { return }
+
+        let frameLength = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+
+        // If stereo, mix to mono; if mono, use directly
+        var samples = [Float](repeating: 0, count: frameLength)
+
+        if channelCount == 1 {
+            // Mono - copy directly
+            for i in 0..<frameLength {
+                samples[i] = channelData[0][i]
+            }
+        } else {
+            // Stereo or more - mix to mono
+            for i in 0..<frameLength {
+                var sum: Float = 0
+                for ch in 0..<channelCount {
+                    sum += channelData[ch][i]
+                }
+                samples[i] = sum / Float(channelCount)
+            }
+        }
+
+        // Call the callback on main thread
+        DispatchQueue.main.async { [weak self] in
+            self?.onAudioInput?(samples)
+        }
     }
 
     /// Stop audio engine
     func stop() {
+        // Remove input tap before stopping
+        audioEngine?.inputNode.removeTap(onBus: 0)
+
         playerNode?.stop()
         audioEngine?.stop()
         audioEngine = nil
         playerNode = nil
         isConnected = false
         isPlaying = false
+        isListening = false
         print("[AudioService] Stopped")
     }
 

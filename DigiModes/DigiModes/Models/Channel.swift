@@ -13,19 +13,22 @@ struct Channel: Identifiable, Equatable, Hashable {
     var callsign: String?        // Parsed from decoded text, or nil
     var messages: [Message]
     var lastActivity: Date
+    var decodingBuffer: String   // Currently being decoded (real-time)
 
     init(
         id: UUID = UUID(),
         frequency: Int,
         callsign: String? = nil,
         messages: [Message] = [],
-        lastActivity: Date = Date()
+        lastActivity: Date = Date(),
+        decodingBuffer: String = ""
     ) {
         self.id = id
         self.frequency = frequency
         self.callsign = callsign
         self.messages = messages
         self.lastActivity = lastActivity
+        self.decodingBuffer = decodingBuffer
     }
 
     /// Display name: callsign if known, otherwise frequency
@@ -40,9 +43,22 @@ struct Channel: Identifiable, Equatable, Hashable {
         return "\(sign)\(offset) Hz"
     }
 
-    /// Preview text for channel list (last message content)
+    /// Preview text for channel list
+    /// Shows real-time decoding buffer if active, otherwise last message
     var previewText: String {
-        messages.last?.content ?? ""
+        // If currently decoding, show that (with newlines as spaces)
+        if !decodingBuffer.isEmpty {
+            return decodingBuffer
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\r", with: " ")
+        }
+        // Otherwise show last message (with newlines as spaces)
+        if let lastContent = messages.last?.content {
+            return lastContent
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\r", with: " ")
+        }
+        return ""
     }
 
     /// Time since last activity

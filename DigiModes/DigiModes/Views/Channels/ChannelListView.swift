@@ -13,10 +13,32 @@ struct ChannelListView: View {
     var body: some View {
         Group {
             if viewModel.channels.isEmpty {
-                ContentUnavailableView {
-                    Label("No Channels", systemImage: "waveform")
-                } description: {
-                    Text("Tap the compose button to start a new transmission.")
+                VStack(spacing: 16) {
+                    if viewModel.isListening {
+                        // Actively listening
+                        Image(systemName: "waveform")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        Text("Listening...")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text("No signals decoded yet. Monitoring audio input for RTTY transmissions.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    } else {
+                        // Not listening yet
+                        Image(systemName: "waveform.slash")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        Text("Not Listening")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text("Audio service starting...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
             } else {
                 List {
