@@ -55,8 +55,8 @@ class AudioService: ObservableObject, @unchecked Sendable {
     func start() async throws {
         // Configure audio session for external audio devices (USB soundcards, headphones)
         let session = AVAudioSession.sharedInstance()
-        // Use .allowBluetooth for headsets, don't use .defaultToSpeaker so USB devices work
-        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .allowBluetoothA2DP])
+        // Use .allowBluetoothHFP for headsets, don't use .defaultToSpeaker so USB devices work
+        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
         try session.setPreferredSampleRate(48000)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
 
