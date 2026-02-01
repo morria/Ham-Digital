@@ -48,9 +48,16 @@ struct MessageBubbleView: View {
                     ProgressView()
                         .scaleEffect(0.6)
                 case .failed:
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.caption2)
-                        .foregroundColor(.red)
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                        if let error = message.errorMessage {
+                            Text(error)
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
+                    }
                 case .sent:
                     EmptyView()
                 }

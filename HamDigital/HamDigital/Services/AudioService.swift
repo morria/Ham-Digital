@@ -156,8 +156,11 @@ class AudioService: ObservableObject, @unchecked Sendable {
     /// - Parameter buffer: The audio buffer to play
     /// - Throws: AudioServiceError if playback fails
     func playBuffer(_ buffer: AVAudioPCMBuffer) async throws {
-        guard let player = playerNode, let engine = audioEngine, engine.isRunning else {
+        guard let player = playerNode, let engine = audioEngine else {
             throw AudioServiceError.notConnected
+        }
+        guard engine.isRunning else {
+            throw AudioServiceError.engineNotRunning
         }
 
         // Convert buffer to engine format if needed
@@ -250,15 +253,44 @@ class AudioService: ObservableObject, @unchecked Sendable {
     }
 
     @objc private func handleRouteChange(_ notification: Notification) {
-        print("[AudioService] Route change detected")
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+            return
+        }
+
+        print("[AudioService] Route change: \(reason.rawValue)")
         updateDeviceNames()
+
+        // Reconfigure audio engine when new device connected
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable:
+            Task { @MainActor in
+                await self.reconfigureForRouteChange()
+            }
+        default:
+            break
+        }
     }
 
     @objc private func handleConfigurationChange(_ notification: Notification) {
         print("[AudioService] Configuration change detected")
-        // Engine may need to be restarted with new configuration
-        if let engine = audioEngine, !engine.isRunning {
-            try? engine.start()
+        Task { @MainActor in
+            await self.reconfigureForRouteChange()
+        }
+    }
+
+    /// Reconfigure audio engine after route or configuration change
+    private func reconfigureForRouteChange() async {
+        guard audioEngine != nil else { return }
+
+        print("[AudioService] Reconfiguring for new audio route...")
+        stop()
+        do {
+            try await start()
+            print("[AudioService] Reconfigured successfully")
+        } catch {
+            print("[AudioService] Reconfigure failed: \(error)")
         }
     }
 
@@ -335,20 +367,26 @@ class AudioService: ObservableObject, @unchecked Sendable {
 
 enum AudioServiceError: Error, LocalizedError {
     case notConnected
+    case engineNotRunning
     case formatError
+    case encodingFailed
     case playbackFailed
     case playbackCancelled
 
     var errorDescription: String? {
         switch self {
         case .notConnected:
-            return "Audio service not connected"
+            return "Audio not connected"
+        case .engineNotRunning:
+            return "Audio engine stopped"
         case .formatError:
-            return "Audio format error"
+            return "Format error"
+        case .encodingFailed:
+            return "Encoding failed"
         case .playbackFailed:
-            return "Audio playback failed"
+            return "Playback failed"
         case .playbackCancelled:
-            return "Playback was cancelled"
+            return "Cancelled"
         }
     }
 }

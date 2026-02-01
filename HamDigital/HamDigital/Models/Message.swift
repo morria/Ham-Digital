@@ -14,6 +14,7 @@ struct Message: Identifiable, Equatable {
     let callsign: String?
     let signalReport: String?  // RST or SNR
     var transmitState: TransmitState?
+    var errorMessage: String?  // Error description if transmission failed
 
     enum Direction: String, Codable {
         case received  // RX - decoded from audio
@@ -35,7 +36,8 @@ struct Message: Identifiable, Equatable {
         mode: DigitalMode = .rtty,
         callsign: String? = nil,
         signalReport: String? = nil,
-        transmitState: TransmitState? = nil
+        transmitState: TransmitState? = nil,
+        errorMessage: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -45,6 +47,7 @@ struct Message: Identifiable, Equatable {
         self.callsign = callsign
         self.signalReport = signalReport
         self.transmitState = transmitState
+        self.errorMessage = errorMessage
     }
 }
 

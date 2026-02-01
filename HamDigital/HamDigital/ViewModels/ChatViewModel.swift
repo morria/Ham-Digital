@@ -232,8 +232,10 @@ class ChatViewModel: ObservableObject {
                 print("[ChatViewModel] Transmission cancelled")
                 // State already set by stopTransmission
             } catch {
-                print("[ChatViewModel] Transmission failed: \(error)")
+                let errorDesc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                print("[ChatViewModel] Transmission failed: \(errorDesc)")
                 channels[channelIndex].messages[messageIndex].transmitState = .failed
+                channels[channelIndex].messages[messageIndex].errorMessage = errorDesc
             }
 
             isTransmitting = false
@@ -251,7 +253,7 @@ class ChatViewModel: ObservableObject {
             print("[ChatViewModel] Playback complete")
         } else {
             print("[ChatViewModel] Modem encoding failed - DigiModesCore may not be linked")
-            throw AudioServiceError.formatError
+            throw AudioServiceError.encodingFailed
         }
     }
 
