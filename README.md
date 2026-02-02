@@ -1,4 +1,4 @@
-# Ham Digital
+# Amateur Digital
 
 An iOS app that provides an iMessage-like interface for amateur radio digital modes (RTTY, PSK31, Olivia) using an external USB audio interface.
 
@@ -21,7 +21,7 @@ The app supports full RTTY transmit and receive:
 
 ### Setup
 
-1. Open `HamDigital/DigiModes.xcodeproj` in Xcode
+1. Open `AmateurDigital/DigiModes.xcodeproj` in Xcode
 2. Select your development team in Signing & Capabilities
 3. Build and run on simulator or device
 
@@ -30,13 +30,13 @@ The app supports full RTTY transmit and receive:
 The core logic (models, codecs) is in a Swift Package that can be built from the command line:
 
 ```bash
-cd HamDigital/HamDigitalCore
+cd AmateurDigital/AmateurDigitalCore
 swift build
 ```
 
 Tests can be run from the command line:
 ```bash
-cd HamDigital/HamDigitalCore && swift test
+cd AmateurDigital/AmateurDigitalCore && swift test
 ```
 
 ### Testing with Audio Files
@@ -44,7 +44,7 @@ cd HamDigital/HamDigitalCore && swift test
 Generate test RTTY audio files:
 
 ```bash
-cd HamDigital/HamDigitalCore
+cd AmateurDigital/AmateurDigitalCore
 swift run GenerateTestAudio
 # Creates: /tmp/rtty_single_channel.wav (2125 Hz)
 #          /tmp/rtty_multi_channel.wav (4 channels: 1500, 1700, 1900, 2100 Hz)
@@ -90,7 +90,7 @@ afplay /tmp/rtty_single_channel.wav      # Play while app listens via mic
 ### Phase 3: RTTY Implementation ✅
 
 - [x] Baudot (ITA2) encoding/decoding tables
-- [x] FSK modulation (tone generation) - via HamDigitalCore
+- [x] FSK modulation (tone generation) - via AmateurDigitalCore
 - [x] Bit timing for transmission
 - [x] FSK demodulation (tone detection)
 - [x] Multi-channel simultaneous decoding (8 channels)
@@ -164,11 +164,11 @@ Compatible interfaces include:
 ### Project Structure
 
 ```
-HamDigital/
+AmateurDigital/
 ├── DigiModes.xcodeproj/        # Xcode project (iOS app)
-├── HamDigital/                  # iOS app source
+├── AmateurDigital/                  # iOS app source
 │   ├── App/
-│   │   └── HamDigitalApp.swift
+│   │   └── AmateurDigitalApp.swift
 │   ├── Models/                 # Channel, Message, DigitalMode, Station
 │   ├── Views/
 │   │   ├── ContentView.swift
@@ -179,15 +179,15 @@ HamDigital/
 │   ├── ViewModels/             # ChatViewModel
 │   ├── Services/               # AudioService, ModemService, SettingsManager, TestAudioLoader
 │   └── Config/                 # ModeConfig
-└── HamDigitalCore/              # Swift Package (CLI buildable)
+└── AmateurDigitalCore/              # Swift Package (CLI buildable)
     ├── Package.swift
     ├── Sources/
-    │   ├── HamDigitalCore/
+    │   ├── AmateurDigitalCore/
     │   │   ├── Models/         # RTTYConfiguration, RTTYChannel
     │   │   ├── Codecs/         # BaudotCodec
     │   │   └── Modems/         # RTTYModem, FSKDemodulator, MultiChannelRTTYDemodulator
     │   └── GenerateTestAudio/  # CLI tool for test audio files
-    └── Tests/HamDigitalCoreTests/
+    └── Tests/AmateurDigitalCoreTests/
 ```
 
 ---

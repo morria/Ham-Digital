@@ -1,34 +1,34 @@
-# Ham Digital - Claude Development Notes
+# Amateur Digital - Claude Development Notes
 
 ## Project Overview
 
-Ham Digital is an iOS app for amateur radio digital modes (RTTY, PSK31, Olivia) with an iMessage-style chat interface. Uses external USB soundcard connected between iPhone and radio for audio I/O.
+Amateur Digital is an iOS app for amateur radio digital modes (RTTY, PSK31, Olivia) with an iMessage-style chat interface. Uses external USB soundcard connected between iPhone and radio for audio I/O.
 
 ## Build Commands
 
 ```bash
-# Build Swift Package (HamDigitalCore)
-cd HamDigital/HamDigitalCore && swift build
+# Build Swift Package (AmateurDigitalCore)
+cd AmateurDigital/AmateurDigitalCore && swift build
 
-# Run HamDigitalCore tests
-cd HamDigital/HamDigitalCore && swift test
+# Run AmateurDigitalCore tests
+cd AmateurDigital/AmateurDigitalCore && swift test
 
 # Build iOS app (requires Xcode)
-xcodebuild -project HamDigital/DigiModes.xcodeproj \
+xcodebuild -project AmateurDigital/DigiModes.xcodeproj \
   -scheme DigiModes \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   build
 
 # Generate RTTY test audio files
-cd HamDigital/HamDigitalCore && swift run GenerateTestAudio
+cd AmateurDigital/AmateurDigitalCore && swift run GenerateTestAudio
 # Outputs: /tmp/rtty_single_channel.wav, /tmp/rtty_multi_channel.wav
 ```
 
 ## Architecture
 
 ### Two Codebases
-1. **HamDigital/** - iOS app (SwiftUI, requires Xcode)
-2. **HamDigitalCore/** - Swift Package with core logic (buildable via CLI)
+1. **AmateurDigital/** - iOS app (SwiftUI, requires Xcode)
+2. **AmateurDigitalCore/** - Swift Package with core logic (buildable via CLI)
 
 ### Key Design Decisions
 - iOS 17+ target (uses `ObservableObject`, not `@Observable`)
@@ -40,8 +40,8 @@ cd HamDigital/HamDigitalCore && swift run GenerateTestAudio
 ### File Organization
 
 ```
-HamDigital/
-├── HamDigital/                    # iOS App
+AmateurDigital/
+├── AmateurDigital/                    # iOS App
 │   ├── Models/                   # Channel, Message, DigitalMode, Station
 │   ├── Views/
 │   │   ├── Channels/             # ChannelListView, ChannelDetailView, ChannelRowView
@@ -52,9 +52,9 @@ HamDigital/
 │   ├── Services/                 # AudioService, ModemService, SettingsManager
 │   └── Config/                   # ModeConfig (enable/disable modes)
 │
-└── HamDigitalCore/                # Swift Package
+└── AmateurDigitalCore/                # Swift Package
     ├── Sources/
-    │   ├── HamDigitalCore/        # Library
+    │   ├── AmateurDigitalCore/        # Library
     │   │   ├── Models/           # RTTYConfiguration, RTTYChannel
     │   │   ├── Codecs/           # BaudotCodec
     │   │   └── Modems/           # RTTYModem, FSKDemodulator, MultiChannelRTTYDemodulator
@@ -79,7 +79,7 @@ HamDigital/
 **Audio Pipeline**
 - `AudioService`: AVAudioEngine with input tap and player node
 - `onAudioInput` callback routes samples to ModemService
-- `ModemService`: bridges to HamDigitalCore's MultiChannelRTTYDemodulator
+- `ModemService`: bridges to AmateurDigitalCore's MultiChannelRTTYDemodulator
 - Decoded characters delivered via `ModemServiceDelegate`
 
 **Message TransmitState**
