@@ -99,15 +99,23 @@ final class MultiChannelIntegrationTests: XCTestCase {
         // Process all samples
         demodulator.process(samples: mixed)
 
-        // Verify each channel decoded something (demodulator accuracy is WIP)
-        var channelsWithOutput = 0
-        for (freq, _, _) in channels {
+        // Verify each channel decoded its expected pattern
+        var channelsWithCorrectOutput = 0
+        for (freq, _, message) in channels {
             let decoded = decodedPerChannel[freq] ?? ""
             if !decoded.isEmpty {
-                channelsWithOutput += 1
+                // Check if decoded output contains expected callsign fragment
+                // Message format: "DE W1AW" - look for callsign letters
+                let expectedCallsign = message.replacingOccurrences(of: "DE ", with: "")
+                let hasExpectedContent = expectedCallsign.contains { decoded.contains($0) }
+                if hasExpectedContent {
+                    channelsWithCorrectOutput += 1
+                }
             }
         }
-        XCTAssertGreaterThan(channelsWithOutput, 0, "At least one channel should decode output")
+        // At least 2 of 4 channels should decode correctly
+        XCTAssertGreaterThanOrEqual(channelsWithCorrectOutput, 2,
+            "At least 2 of 4 channels should decode expected content. Got \(channelsWithCorrectOutput)")
     }
 
     // MARK: - Channel Separation
@@ -153,9 +161,25 @@ final class MultiChannelIntegrationTests: XCTestCase {
         demod1.process(samples: mixed)
         demod2.process(samples: mixed)
 
-        // Both channels should decode something (exact separation is WIP)
-        let hasOutput = !decoded1.isEmpty || !decoded2.isEmpty
-        XCTAssertTrue(hasOutput, "Should decode something from mixed channels. Ch1: \(decoded1), Ch2: \(decoded2)")
+        // Channel 1 should decode "A"s (not "B"s)
+        // Channel 2 should decode "B"s (not "A"s)
+        let ch1HasA = decoded1.contains("A")
+        let ch1HasB = decoded1.contains("B")
+        let ch2HasA = decoded2.contains("A")
+        let ch2HasB = decoded2.contains("B")
+
+        // At minimum, we need output from at least one channel
+        XCTAssertTrue(!decoded1.isEmpty || !decoded2.isEmpty,
+            "Should decode from at least one channel. Ch1: '\(decoded1)', Ch2: '\(decoded2)'")
+
+        // Check for cross-contamination - each channel should primarily decode its own signal
+        if !decoded1.isEmpty && !decoded2.isEmpty {
+            // If both channels have output, verify separation
+            XCTAssertTrue(ch1HasA || !ch1HasB,
+                "Channel 1 should prefer 'A's over 'B's. Got: '\(decoded1)'")
+            XCTAssertTrue(ch2HasB || !ch2HasA,
+                "Channel 2 should prefer 'B's over 'A's. Got: '\(decoded2)'")
+        }
     }
 
     // MARK: - Stress Test
@@ -206,9 +230,39 @@ final class MultiChannelIntegrationTests: XCTestCase {
 
         demodulator.process(samples: mixed)
 
-        // Should decode some characters from the 8-channel mix
-        // Note: exact decoding accuracy is work in progress
-        XCTAssertTrue(true, "8-channel test completed. Decoded \(decodedChars.count) characters")
+        // Count how many channels produced output with expected "TEST" characters
+        var channelsWithTestChars = Set<Double>()
+        let testChars = Set(Array("TEST"))
+
+        // Track decoded chars per frequency
+        var decodedPerFreq: [Double: String] = [:]
+        for freq in frequencies {
+            decodedPerFreq[freq] = ""
+        }
+
+        // Re-process to track per-channel
+        let trackingDelegate = TestMultiChannelDelegate { char, channel in
+            decodedPerFreq[channel.frequency, default: ""].append(char)
+        }
+        let trackingDemod = MultiChannelRTTYDemodulator(
+            frequencies: frequencies,
+            configuration: RTTYConfiguration.standard
+        )
+        trackingDemod.delegate = trackingDelegate
+        trackingDemod.process(samples: mixed)
+
+        for (freq, decoded) in decodedPerFreq {
+            let hasTestChar = decoded.contains { testChars.contains($0) }
+            if hasTestChar {
+                channelsWithTestChars.insert(freq)
+            }
+        }
+
+        // At least 2 of 8 channels should decode some expected content
+        // Note: Multi-channel decoding with mixed signals is challenging
+        // This threshold catches major regressions while being achievable
+        XCTAssertGreaterThanOrEqual(channelsWithTestChars.count, 2,
+            "At least 2 of 8 channels should decode TEST characters. Got \(channelsWithTestChars.count)")
     }
 }
 
