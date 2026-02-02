@@ -1,14 +1,26 @@
 # Amateur Digital
 
-An iOS app that provides an iMessage-like interface for amateur radio digital modes (RTTY, PSK31, Olivia) using an external USB audio interface.
+An iOS app that provides an iMessage-like interface for amateur radio digital modes using an external USB audio interface.
 
-## Current Status: Functional RTTY
+**Website**: [amateurdigital.app](https://amateurdigital.app)
 
-The app supports full RTTY transmit and receive:
+## Current Status: RTTY & PSK Operational
+
+The app supports full transmit and receive for RTTY and PSK modes:
+
+### Supported Modes
+- **RTTY** - Radio Teletype (45.45, 50, 75, 100 baud)
+- **PSK31** - Phase Shift Keying at 31.25 baud
+- **BPSK63** - Binary PSK at 62.5 baud
+- **QPSK31** - Quadrature PSK at 31.25 baud
+- **QPSK63** - Quadrature PSK at 62.5 baud
+
+### Features
 - **TX**: Type a message, tap send, and audio is generated and played through your device
-- **RX**: The app continuously listens for RTTY signals and decodes them into messages
-- **Multi-channel**: Monitors 8 frequencies simultaneously (1200-2600 Hz)
+- **RX**: Continuously listens for signals and decodes them into messages
+- **Multi-channel**: Monitors multiple frequencies simultaneously
 - **Squelch**: Adjustable squelch filters noise-induced false decodes
+- **Mode Selection**: Card-based UI for choosing digital modes
 - **Debug mode**: Test decoding pipeline with WAV files (no radio needed)
 
 ## Getting Started
@@ -110,11 +122,13 @@ afplay /tmp/rtty_single_channel.wav      # Play while app listens via mic
 - [ ] PTT control (via audio VOX)
 - [ ] Message macros/templates
 
-### Phase 5: PSK31 Implementation
+### Phase 5: PSK Implementation ✅
 
-- [ ] Varicode encoding/decoding
-- [ ] BPSK modulation/demodulation
-- [ ] Carrier phase tracking
+- [x] Varicode encoding/decoding (VaricodeCodec)
+- [x] BPSK modulation/demodulation
+- [x] Carrier phase tracking
+- [x] Multi-channel PSK decoding
+- [x] Support for PSK31, BPSK63, QPSK31, QPSK63
 - [ ] AFC (Automatic Frequency Control)
 
 ### Phase 6: Olivia Implementation
@@ -143,6 +157,15 @@ afplay /tmp/rtty_single_channel.wav      # Play while app listens via mic
 - **Space frequency**: 1955 Hz (mark - shift)
 - **Encoding**: 5-bit Baudot/ITA2 with LTRS/FIGS shift
 
+### PSK Specifications
+
+- **PSK31**: BPSK, 31.25 baud, ~31 Hz bandwidth
+- **BPSK63**: BPSK, 62.5 baud, ~63 Hz bandwidth
+- **QPSK31**: QPSK, 31.25 baud (2 bits/symbol)
+- **QPSK63**: QPSK, 62.5 baud (2 bits/symbol)
+- **Encoding**: Varicode (variable-length ASCII encoding)
+- **Center frequency**: 1000 Hz (default), configurable
+
 ### Audio Interface Requirements
 
 The app uses an external USB audio interface connected to the iOS device:
@@ -164,30 +187,38 @@ Compatible interfaces include:
 ### Project Structure
 
 ```
-AmateurDigital/
-├── DigiModes.xcodeproj/        # Xcode project (iOS app)
-├── AmateurDigital/                  # iOS app source
-│   ├── App/
-│   │   └── AmateurDigitalApp.swift
-│   ├── Models/                 # Channel, Message, DigitalMode, Station
-│   ├── Views/
-│   │   ├── ContentView.swift
-│   │   ├── Channels/           # ChannelListView, ChannelDetailView, ChannelRowView
-│   │   ├── Chat/               # MessageBubbleView
-│   │   ├── Components/         # ModePickerView
-│   │   └── Settings/           # SettingsView
-│   ├── ViewModels/             # ChatViewModel
-│   ├── Services/               # AudioService, ModemService, SettingsManager, TestAudioLoader
-│   └── Config/                 # ModeConfig
-└── AmateurDigitalCore/              # Swift Package (CLI buildable)
-    ├── Package.swift
-    ├── Sources/
-    │   ├── AmateurDigitalCore/
-    │   │   ├── Models/         # RTTYConfiguration, RTTYChannel
-    │   │   ├── Codecs/         # BaudotCodec
-    │   │   └── Modems/         # RTTYModem, FSKDemodulator, MultiChannelRTTYDemodulator
-    │   └── GenerateTestAudio/  # CLI tool for test audio files
-    └── Tests/AmateurDigitalCoreTests/
+.
+├── website/                         # GitHub Pages website
+│   ├── index.html
+│   └── app-icon.png
+├── .github/workflows/               # CI/CD
+│   └── deploy-pages.yml             # GitHub Pages deployment
+└── AmateurDigital/
+    ├── DigiModes.xcodeproj/         # Xcode project (iOS app)
+    ├── AmateurDigital/              # iOS app source
+    │   ├── App/
+    │   │   └── AmateurDigitalApp.swift
+    │   ├── Models/                  # Channel, Message, DigitalMode, Station
+    │   ├── Views/
+    │   │   ├── ModeSelectionView.swift   # Mode selection (entry point)
+    │   │   ├── ContentView.swift
+    │   │   ├── Channels/            # ChannelListView, ChannelDetailView, ChannelRowView
+    │   │   ├── Chat/                # MessageBubbleView, ChatView, MessageInputView
+    │   │   ├── Components/          # ModePickerView
+    │   │   └── Settings/            # SettingsView
+    │   ├── ViewModels/              # ChatViewModel
+    │   ├── Services/                # AudioService, ModemService, SettingsManager
+    │   └── Config/                  # ModeConfig
+    └── AmateurDigitalCore/          # Swift Package (CLI buildable)
+        ├── Package.swift
+        ├── Sources/
+        │   ├── AmateurDigitalCore/
+        │   │   ├── Models/          # Channel, Message, DigitalMode, Station
+        │   │   ├── Codecs/          # BaudotCodec, VaricodeCodec
+        │   │   ├── DSP/             # GoertzelFilter, SineGenerator
+        │   │   └── Modems/          # RTTYModem, PSKModem, Multi-channel demodulators
+        │   └── GenerateTestAudio/   # CLI tool for test audio files
+        └── Tests/AmateurDigitalCoreTests/
 ```
 
 ---

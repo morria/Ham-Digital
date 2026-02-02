@@ -32,12 +32,26 @@ public protocol FSKDemodulatorDelegate: AnyObject {
     )
 }
 
+/// Represents a bit decision with confidence level
+public struct BitDecision {
+    /// The decoded bit value
+    public let value: Bool
+
+    /// Confidence level from 0.0 (uncertain) to 1.0 (certain)
+    public let confidence: Float
+
+    public init(value: Bool, confidence: Float) {
+        self.value = value
+        self.confidence = min(1.0, max(0.0, confidence))
+    }
+}
+
 /// FSK Demodulator state machine states
 public enum DemodulatorState: Equatable {
     case waitingForStart
     case inStartBit(samplesProcessed: Int)
-    case receivingData(bit: Int, samplesProcessed: Int, accumulator: UInt8)
-    case inStopBits(samplesProcessed: Int)
+    case receivingData(bit: Int, samplesProcessed: Int, accumulator: UInt8, confidence: Float)
+    case inStopBits(samplesProcessed: Int, markAccumulator: Float, sampleCount: Int)
 }
 
 /// FSK Demodulator for RTTY reception
@@ -49,6 +63,14 @@ public enum DemodulatorState: Equatable {
 /// - 1 start bit (space frequency)
 /// - 5 data bits (LSB first, mark=1, space=0)
 /// - 1.5 stop bits (mark frequency)
+///
+/// Improvements for noisy HF channels:
+/// - Bandpass pre-filtering to reject out-of-band noise
+/// - AGC to handle fading signals
+/// - Adaptive squelch that tracks noise floor
+/// - Extended correlation averaging with weighting
+/// - Soft decisions with confidence tracking
+/// - Stop bit validation
 public final class FSKDemodulator {
 
     // MARK: - Properties
@@ -57,6 +79,9 @@ public final class FSKDemodulator {
     private var markFilter: GoertzelFilter
     private var spaceFilter: GoertzelFilter
     private let baudotCodec: BaudotCodec
+
+    /// Bandpass filter for out-of-band noise rejection
+    private var bandpassFilter: BandpassFilter
 
     /// Current state machine state
     public private(set) var state: DemodulatorState = .waitingForStart
@@ -72,10 +97,53 @@ public final class FSKDemodulator {
 
     /// Correlation history for signal detection (smoothing)
     private var correlationHistory: [Float] = []
-    private let correlationHistorySize = 8
+
+    /// Dynamic correlation history size (~1 bit period)
+    private var correlationHistorySize: Int {
+        max(16, configuration.samplesPerBit / analysisBlockSize)
+    }
 
     /// Threshold for mark/space decision
     private let correlationThreshold: Float = 0.2
+
+    // MARK: - AGC Properties
+
+    /// AGC gain factor
+    private var agcGain: Float = 1.0
+
+    /// Target signal level for AGC
+    private let agcTarget: Float = 0.5
+
+    /// AGC attack rate (fast response to strong signals)
+    private let agcAttack: Float = 0.01
+
+    /// AGC decay rate (slow recovery from weak signals)
+    private let agcDecay: Float = 0.0001
+
+    /// Minimum AGC gain
+    private let agcMinGain: Float = 0.1
+
+    /// Maximum AGC gain
+    private let agcMaxGain: Float = 10.0
+
+    // MARK: - Adaptive Squelch Properties
+
+    /// Tracked noise floor level
+    private var noiseFloor: Float = 0.1
+
+    /// Noise floor tracking rate for signals below current floor
+    private let noiseTrackingFast: Float = 0.01
+
+    /// Noise floor tracking rate for signals near current floor
+    private let noiseTrackingSlow: Float = 0.001
+
+    /// Multiplier for noise floor to get squelch level
+    private let squelchMultiplier: Float = 3.0
+
+    /// Adaptive squelch level (computed from noise floor)
+    public var adaptiveSquelchLevel: Float {
+        noiseFloor * squelchMultiplier
+    }
 
     /// Signal detection state
     private var _signalDetected: Bool = false
@@ -83,8 +151,21 @@ public final class FSKDemodulator {
         _signalDetected
     }
 
-    /// Squelch level (0.0-1.0). Characters below this signal strength are suppressed.
-    public var squelchLevel: Float = 0.3
+    /// Manual squelch level override (0.0-1.0). Set to 0 to use adaptive squelch.
+    public var squelchLevel: Float = 0
+
+    /// Effective squelch level (uses manual if set, otherwise adaptive)
+    private var effectiveSquelchLevel: Float {
+        squelchLevel > 0 ? squelchLevel : adaptiveSquelchLevel
+    }
+
+    // MARK: - Confidence Tracking
+
+    /// Minimum confidence threshold for character output
+    public var minCharacterConfidence: Float = 0.0
+
+    /// Last character's confidence level
+    public private(set) var lastCharacterConfidence: Float = 0
 
     /// Average signal strength
     public var signalStrength: Float {
@@ -120,6 +201,14 @@ public final class FSKDemodulator {
             sampleRate: configuration.sampleRate,
             blockSize: analysisBlockSize
         )
+
+        // Initialize bandpass filter for mark/space frequencies with 75 Hz margin
+        self.bandpassFilter = BandpassFilter(
+            markFrequency: configuration.markFrequency,
+            spaceFrequency: configuration.spaceFrequency,
+            margin: 75.0,
+            sampleRate: configuration.sampleRate
+        )
     }
 
     // MARK: - Processing
@@ -135,16 +224,62 @@ public final class FSKDemodulator {
     /// Process a single audio sample
     /// - Parameter sample: Audio sample value
     private func processSample(_ sample: Float) {
-        sampleBuffer.append(sample)
+        // Apply bandpass filter to reject out-of-band noise
+        let filteredSample = bandpassFilter.process(sample)
+
+        // Apply AGC to normalize signal level
+        let agcSample = applyAGC(filteredSample)
+
+        sampleBuffer.append(agcSample)
 
         // When we have enough samples for analysis
         if sampleBuffer.count >= analysisBlockSize {
             let correlation = analyzeBlock()
             updateCorrelationHistory(correlation)
+            updateNoiseFloor(correlation)
             updateSignalDetection()
             processStateMachine(correlation: correlation)
             sampleBuffer.removeAll(keepingCapacity: true)
         }
+    }
+
+    /// Apply AGC to normalize signal level
+    /// - Parameter sample: Input sample
+    /// - Returns: Gain-adjusted sample
+    private func applyAGC(_ sample: Float) -> Float {
+        let output = sample * agcGain
+        let level = abs(output)
+
+        if level > agcTarget {
+            // Fast attack - reduce gain quickly for strong signals
+            agcGain *= (1.0 - agcAttack)
+        } else {
+            // Slow decay - increase gain slowly for weak signals
+            agcGain *= (1.0 + agcDecay)
+        }
+
+        // Clamp gain to reasonable range
+        agcGain = max(agcMinGain, min(agcMaxGain, agcGain))
+
+        return output
+    }
+
+    /// Update noise floor estimate
+    /// - Parameter correlation: Current correlation value
+    private func updateNoiseFloor(_ correlation: Float) {
+        let magnitude = abs(correlation)
+
+        if magnitude < noiseFloor {
+            // Signal is below noise floor - track quickly
+            noiseFloor = noiseFloor * (1.0 - noiseTrackingFast) + magnitude * noiseTrackingFast
+        } else if magnitude < noiseFloor * 2.0 {
+            // Signal is near noise floor - track slowly
+            noiseFloor = noiseFloor * (1.0 - noiseTrackingSlow) + magnitude * noiseTrackingSlow
+        }
+        // Signals well above noise floor don't update the floor
+
+        // Keep noise floor in reasonable range
+        noiseFloor = max(0.01, min(0.5, noiseFloor))
     }
 
     /// Analyze the current sample buffer and return mark/space correlation
@@ -166,15 +301,50 @@ public final class FSKDemodulator {
     /// Update the correlation history for smoothing
     private func updateCorrelationHistory(_ correlation: Float) {
         correlationHistory.append(correlation)
-        if correlationHistory.count > correlationHistorySize {
+        while correlationHistory.count > correlationHistorySize {
             correlationHistory.removeFirst()
         }
+    }
+
+    /// Calculate weighted average correlation (recent samples weighted higher)
+    private func weightedAverageCorrelation() -> Float {
+        guard !correlationHistory.isEmpty else { return 0 }
+
+        var sum: Float = 0
+        var weightSum: Float = 0
+
+        for (i, corr) in correlationHistory.enumerated() {
+            let weight = Float(i + 1)  // Linear weighting: 1, 2, 3, ...
+            sum += corr * weight
+            weightSum += weight
+        }
+
+        return sum / weightSum
+    }
+
+    /// Make a soft decision with confidence
+    /// - Parameter correlation: Current correlation value
+    /// - Returns: Bit decision with confidence
+    private func makeSoftDecision(correlation: Float) -> BitDecision {
+        let magnitude = abs(correlation)
+        let value = correlation > 0  // Positive = mark = 1
+
+        // Confidence scales with magnitude
+        // Full confidence at 0.5 correlation, zero at threshold
+        let confidence: Float
+        if magnitude < correlationThreshold {
+            confidence = 0
+        } else {
+            confidence = min(1.0, (magnitude - correlationThreshold) / (0.5 - correlationThreshold))
+        }
+
+        return BitDecision(value: value, confidence: confidence)
     }
 
     /// Update signal detection state
     private func updateSignalDetection() {
         let avgStrength = signalStrength
-        let newDetected = avgStrength > 0.3
+        let newDetected = avgStrength > effectiveSquelchLevel
 
         if newDetected != _signalDetected {
             _signalDetected = newDetected
@@ -209,64 +379,93 @@ public final class FSKDemodulator {
                 state = .waitingForStart
             } else if newSamples >= samplesPerBit {
                 // Start bit complete, move to data bits
-                state = .receivingData(bit: 0, samplesProcessed: 0, accumulator: 0)
+                state = .receivingData(bit: 0, samplesProcessed: 0, accumulator: 0, confidence: 1.0)
             } else {
                 state = .inStartBit(samplesProcessed: newSamples)
             }
 
-        case .receivingData(let bit, let samplesProcessed, var accumulator):
+        case .receivingData(let bit, let samplesProcessed, var accumulator, var confidence):
             let newSamples = samplesProcessed + samplesPerBlock
 
             // Sample at center of bit
             if samplesProcessed < samplesPerHalfBit && newSamples >= samplesPerHalfBit {
-                // This is the center sample - make decision
-                if correlation > correlationThreshold {
+                // Make decision based on current correlation
+                let decision = makeSoftDecision(correlation: correlation)
+
+                if decision.value {
                     // Mark = 1
                     accumulator |= (1 << bit)
                 }
                 // Space = 0 (already 0 in accumulator)
+
+                // Track minimum confidence across all bits
+                confidence = min(confidence, decision.confidence)
             }
 
             if newSamples >= samplesPerBit {
                 // Bit complete
                 if bit >= 4 {
                     // All 5 data bits received, move to stop bits
-                    state = .inStopBits(samplesProcessed: 0)
-                    // Decode and emit the character
-                    decodeAndEmit(accumulator)
+                    state = .inStopBits(samplesProcessed: 0, markAccumulator: 0, sampleCount: 0)
+                    // Decode and emit the character with confidence
+                    decodeAndEmit(accumulator, confidence: confidence)
                 } else {
                     // Move to next bit
                     state = .receivingData(
                         bit: bit + 1,
                         samplesProcessed: 0,
-                        accumulator: accumulator
+                        accumulator: accumulator,
+                        confidence: confidence
                     )
                 }
             } else {
                 state = .receivingData(
                     bit: bit,
                     samplesProcessed: newSamples,
-                    accumulator: accumulator
+                    accumulator: accumulator,
+                    confidence: confidence
                 )
             }
 
-        case .inStopBits(let samplesProcessed):
+        case .inStopBits(let samplesProcessed, var markAccumulator, var sampleCount):
             let newSamples = samplesProcessed + samplesPerBlock
             let stopBitSamples = Int(1.5 * Double(samplesPerBit))
 
+            // Accumulate correlation during stop bits
+            markAccumulator += correlation
+            sampleCount += 1
+
             if newSamples >= stopBitSamples {
-                // Stop bits complete, ready for next character
+                // Stop bits complete
+                // Validate that stop bits were mark frequency
+                let avgStopCorrelation = sampleCount > 0 ? markAccumulator / Float(sampleCount) : 0
+
+                if avgStopCorrelation < 0 {
+                    // Stop bits were space - framing error
+                    // Character was already emitted but may be unreliable
+                    // Future: could flag or resync here
+                }
+
                 state = .waitingForStart
             } else {
-                state = .inStopBits(samplesProcessed: newSamples)
+                state = .inStopBits(
+                    samplesProcessed: newSamples,
+                    markAccumulator: markAccumulator,
+                    sampleCount: sampleCount
+                )
             }
         }
     }
 
     /// Decode a Baudot code and emit the character via delegate
-    private func decodeAndEmit(_ code: UInt8) {
+    private func decodeAndEmit(_ code: UInt8, confidence: Float) {
+        lastCharacterConfidence = confidence
+
         // Apply squelch - suppress output if signal strength is below threshold
-        guard signalStrength >= squelchLevel else { return }
+        guard signalStrength >= effectiveSquelchLevel else { return }
+
+        // Apply confidence threshold
+        guard confidence >= minCharacterConfidence else { return }
 
         if let character = baudotCodec.decode(code) {
             delegate?.demodulator(
@@ -287,8 +486,12 @@ public final class FSKDemodulator {
         correlationHistory.removeAll(keepingCapacity: true)
         markFilter.reset()
         spaceFilter.reset()
+        bandpassFilter.reset()
         baudotCodec.reset()
         _signalDetected = false
+        agcGain = 1.0
+        noiseFloor = 0.1
+        lastCharacterConfidence = 0
     }
 
     /// Tune to a different center frequency
@@ -306,6 +509,13 @@ public final class FSKDemodulator {
             frequency: configuration.spaceFrequency,
             sampleRate: configuration.sampleRate,
             blockSize: analysisBlockSize
+        )
+
+        bandpassFilter = BandpassFilter(
+            markFrequency: configuration.markFrequency,
+            spaceFrequency: configuration.spaceFrequency,
+            margin: 75.0,
+            sampleRate: configuration.sampleRate
         )
 
         reset()

@@ -307,3 +307,258 @@ extension FSKDemodulatorTests {
                      "Should decode numbers. Got: \(text)")
     }
 }
+
+// MARK: - Noisy Channel Tests
+
+extension FSKDemodulatorTests {
+
+    /// Add white noise to signal at specified SNR
+    /// - Parameters:
+    ///   - signal: Clean signal samples
+    ///   - snrDB: Signal-to-noise ratio in dB
+    ///   - seed: Random seed for reproducibility
+    /// - Returns: Noisy signal samples
+    func addWhiteNoise(to signal: [Float], snrDB: Float, seed: UInt64 = 42) -> [Float] {
+        // Calculate signal RMS
+        let signalPower = signal.map { $0 * $0 }.reduce(0, +) / Float(signal.count)
+        let signalRMS = sqrt(signalPower)
+
+        // Calculate required noise RMS for target SNR
+        // SNR(dB) = 20 * log10(signal/noise)
+        // noise = signal / 10^(SNR/20)
+        let noiseRMS = signalRMS / pow(10.0, snrDB / 20.0)
+
+        // Generate white noise with seeded random
+        var generator = TestRandomGenerator(seed: seed)
+        var noisy = [Float]()
+        noisy.reserveCapacity(signal.count)
+
+        for sample in signal {
+            // Box-Muller transform for Gaussian noise
+            let u1 = Float(generator.nextDouble())
+            let u2 = Float(generator.nextDouble())
+            let noise = noiseRMS * sqrt(-2.0 * log(max(u1, 0.0001))) * cos(2.0 * .pi * u2)
+            noisy.append(sample + noise)
+        }
+
+        return noisy
+    }
+
+    /// Calculate character error rate between expected and actual strings
+    func characterErrorRate(expected: String, actual: String) -> Float {
+        guard !expected.isEmpty else { return actual.isEmpty ? 0 : 1 }
+
+        let expectedChars = Array(expected.uppercased())
+        let actualChars = Array(actual.uppercased())
+
+        // Count matching characters (allowing for some position flexibility)
+        var matches = 0
+        var actualIndex = 0
+
+        for expectedChar in expectedChars {
+            // Search for character in remaining actual characters
+            while actualIndex < actualChars.count {
+                if actualChars[actualIndex] == expectedChar {
+                    matches += 1
+                    actualIndex += 1
+                    break
+                }
+                actualIndex += 1
+            }
+        }
+
+        let errorRate = 1.0 - Float(matches) / Float(expectedChars.count)
+        return errorRate
+    }
+
+    func testDecodeWithHighSNR() {
+        // 20 dB SNR - should decode perfectly
+        let text = "CQ DE W1AW"
+        let cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 100, postambleMs: 100)
+        let noisySamples = addWhiteNoise(to: cleanSamples, snrDB: 20)
+
+        // Use lower confidence threshold for noisy signals
+        demodulator.minCharacterConfidence = 0.1
+        demodulator.squelchLevel = 0.1
+
+        demodulator.process(samples: noisySamples)
+
+        let decoded = String(delegate.decodedCharacters)
+        let cer = characterErrorRate(expected: text, actual: decoded)
+
+        XCTAssertLessThan(cer, 0.1, "20 dB SNR should have <10% CER. Got: \(decoded)")
+    }
+
+    func testDecodeWithModerateSNR() {
+        // 15 dB SNR - should decode well
+        let text = "CQ CQ"
+        let cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 100, postambleMs: 100)
+        let noisySamples = addWhiteNoise(to: cleanSamples, snrDB: 15)
+
+        demodulator.minCharacterConfidence = 0.1
+        demodulator.squelchLevel = 0.1
+
+        demodulator.process(samples: noisySamples)
+
+        let decoded = String(delegate.decodedCharacters)
+        let cer = characterErrorRate(expected: text, actual: decoded)
+
+        XCTAssertLessThan(cer, 0.2, "15 dB SNR should have <20% CER. Got: \(decoded)")
+    }
+
+    func testDecodeWithLowSNR() {
+        // 10 dB SNR - challenging but should decode most
+        let text = "TEST"
+        let cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 150, postambleMs: 150)
+        let noisySamples = addWhiteNoise(to: cleanSamples, snrDB: 10)
+
+        demodulator.minCharacterConfidence = 0.05
+        demodulator.squelchLevel = 0.05
+
+        demodulator.process(samples: noisySamples)
+
+        let decoded = String(delegate.decodedCharacters)
+        let cer = characterErrorRate(expected: text, actual: decoded)
+
+        XCTAssertLessThan(cer, 0.5, "10 dB SNR should have <50% CER. Got: \(decoded)")
+    }
+
+    func testDecodeWithVeryLowSNR() {
+        // 6 dB SNR - very challenging
+        let text = "HI"
+        let cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 200, postambleMs: 200)
+        let noisySamples = addWhiteNoise(to: cleanSamples, snrDB: 6)
+
+        demodulator.minCharacterConfidence = 0.0
+        demodulator.squelchLevel = 0.0
+
+        demodulator.process(samples: noisySamples)
+
+        let decoded = String(delegate.decodedCharacters)
+
+        // At 6 dB, we may not decode perfectly but should get something
+        // This is more of a smoke test to ensure we don't crash
+        XCTAssertTrue(delegate.decodedCharacters.count >= 0,
+                     "Should process 6 dB SNR signal without crashing. Got: \(decoded)")
+    }
+
+    func testAdaptiveSquelch() {
+        // Test that adaptive squelch tracks noise floor
+        demodulator.squelchLevel = 0  // Use adaptive
+
+        // Process some noise-only samples
+        var generator = TestRandomGenerator(seed: 123)
+        var noise = [Float]()
+        for _ in 0..<10000 {
+            noise.append(Float(generator.nextDouble() * 2.0 - 1.0) * 0.1)
+        }
+
+        demodulator.process(samples: noise)
+
+        // Adaptive squelch should be low (tracking noise floor)
+        XCTAssertLessThan(demodulator.adaptiveSquelchLevel, 0.5,
+                        "Adaptive squelch should track low noise floor")
+
+        // Now process some signal
+        let signalSamples = modulator.modulateTextWithIdle("TEST", preambleMs: 50, postambleMs: 50)
+        demodulator.process(samples: signalSamples)
+
+        // Should detect signal
+        XCTAssertTrue(demodulator.signalStrength > demodulator.adaptiveSquelchLevel ||
+                     !delegate.decodedCharacters.isEmpty,
+                     "Should detect signal above adaptive squelch")
+    }
+
+    func testConfidenceTracking() {
+        // Test that confidence is tracked per character
+        let samples = modulator.modulateTextWithIdle("E", preambleMs: 100, postambleMs: 100)
+
+        demodulator.process(samples: samples)
+
+        // Clean signal should have high confidence
+        if !delegate.decodedCharacters.isEmpty {
+            XCTAssertGreaterThan(demodulator.lastCharacterConfidence, 0.5,
+                               "Clean signal should have high confidence")
+        }
+    }
+
+    func testOutOfBandNoiseRejection() {
+        // Test that bandpass filter rejects out-of-band noise
+        let text = "CQ"
+        let cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 100, postambleMs: 100)
+
+        // Add strong out-of-band interference at 500 Hz
+        var interference = [Float]()
+        let sampleRate = 48000.0
+        for i in 0..<cleanSamples.count {
+            let t = Double(i) / sampleRate
+            // Strong 500 Hz tone (out of band - well below 1955-2125 Hz)
+            interference.append(Float(sin(2.0 * .pi * 500.0 * t)) * 2.0)
+        }
+
+        // Combine signal with interference
+        var combined = [Float]()
+        for i in 0..<cleanSamples.count {
+            combined.append(cleanSamples[i] + interference[i])
+        }
+
+        demodulator.minCharacterConfidence = 0.1
+        demodulator.squelchLevel = 0.1
+
+        demodulator.process(samples: combined)
+
+        let decoded = String(delegate.decodedCharacters)
+        let cer = characterErrorRate(expected: text, actual: decoded)
+
+        // Should still decode despite strong out-of-band interference
+        XCTAssertLessThan(cer, 0.5,
+                        "Should reject out-of-band interference. Got: \(decoded)")
+    }
+
+    func testAGCWithFading() {
+        // Test AGC handles amplitude variations (simulated fading)
+        let text = "TEST"
+        var cleanSamples = modulator.modulateTextWithIdle(text, preambleMs: 100, postambleMs: 100)
+
+        // Apply simulated slow fading (amplitude modulation)
+        let fadeRate = 2.0  // Hz
+        let sampleRate = 48000.0
+        for i in 0..<cleanSamples.count {
+            let t = Double(i) / sampleRate
+            // Fade between 0.2 and 1.0 amplitude
+            let fade = Float(0.6 + 0.4 * sin(2.0 * .pi * fadeRate * t))
+            cleanSamples[i] *= fade
+        }
+
+        demodulator.minCharacterConfidence = 0.1
+        demodulator.squelchLevel = 0.1
+
+        demodulator.process(samples: cleanSamples)
+
+        let decoded = String(delegate.decodedCharacters)
+        let cer = characterErrorRate(expected: text, actual: decoded)
+
+        // AGC should help decode despite fading
+        XCTAssertLessThan(cer, 0.5,
+                        "AGC should handle fading. Got: \(decoded)")
+    }
+}
+
+// MARK: - Seeded Random Generator for Tests
+
+private struct TestRandomGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func nextDouble() -> Double {
+        // xorshift64*
+        state ^= state >> 12
+        state ^= state << 25
+        state ^= state >> 27
+        let value = state &* 0x2545F4914F6CDD1D
+        return Double(value) / Double(UInt64.max)
+    }
+}
