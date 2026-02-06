@@ -157,6 +157,9 @@ struct ChannelDetailView: View {
                             .focused($isTextFieldFocused)
                             .textInputAutocapitalization(viewModel.selectedMode == .rtty ? .characters : .never)
                             .autocorrectionDisabled(true)
+                            .onSubmit {
+                                sendMessage()
+                            }
 
                         Button {
                             if viewModel.isTransmitting {

@@ -53,6 +53,7 @@ final class MultiChannelRTTYDemodulatorTests: XCTestCase {
     override func setUp() {
         super.setUp()
         demodulator = MultiChannelRTTYDemodulator(frequencies: [1500, 2125])
+        demodulator.afcEnabled = false  // Disable AFC for deterministic tests
         delegate = TestDelegate()
         demodulator.delegate = delegate
     }
@@ -291,6 +292,7 @@ extension MultiChannelRTTYDemodulatorTests {
 
         // Demodulator with both frequencies
         let multiDemod = MultiChannelRTTYDemodulator(frequencies: [1500, 2125])
+        multiDemod.afcEnabled = false  // Disable AFC for deterministic test
         let multiDelegate = TestDelegate()
         multiDemod.delegate = multiDelegate
 

@@ -167,6 +167,30 @@ public final class FSKDemodulator {
     /// Last character's confidence level
     public private(set) var lastCharacterConfidence: Float = 0
 
+    // MARK: - AFC Properties
+
+    /// Whether AFC (Automatic Frequency Control) is enabled
+    public var afcEnabled: Bool = true
+
+    /// Current frequency correction in Hz (read-only)
+    public private(set) var frequencyCorrection: Float = 0
+
+    /// AFC tracking range in Hz (searches ±this value)
+    public var afcRange: Float = 50.0
+
+    /// AFC update interval in analysis blocks (~2 bits at 4 blocks/bit)
+    private let afcUpdateInterval: Int = 8
+
+    /// Counter for AFC update timing
+    private var afcBlockCounter: Int = 0
+
+    /// AFC filter coefficient (0-1, lower = slower tracking)
+    private let afcAlpha: Float = 0.1
+
+    /// Offset Goertzel filters for AFC correlation detection
+    private var markOffsetFilters: [Float: GoertzelFilter] = [:]
+    private var spaceOffsetFilters: [Float: GoertzelFilter] = [:]
+
     /// Average signal strength
     public var signalStrength: Float {
         guard !correlationHistory.isEmpty else { return 0 }
@@ -209,6 +233,96 @@ public final class FSKDemodulator {
             margin: 75.0,
             sampleRate: configuration.sampleRate
         )
+
+        // Initialize AFC offset filters
+        initializeAFCFilters()
+    }
+
+    // MARK: - AFC Methods
+
+    /// Initialize Goertzel filters at various frequency offsets for AFC
+    private func initializeAFCFilters() {
+        let offsets: [Float] = [-50, -25, 0, 25, 50]
+
+        markOffsetFilters.removeAll()
+        spaceOffsetFilters.removeAll()
+
+        for offset in offsets {
+            markOffsetFilters[offset] = GoertzelFilter(
+                frequency: configuration.markFrequency + Double(offset),
+                sampleRate: configuration.sampleRate,
+                blockSize: analysisBlockSize
+            )
+            spaceOffsetFilters[offset] = GoertzelFilter(
+                frequency: configuration.spaceFrequency + Double(offset),
+                sampleRate: configuration.sampleRate,
+                blockSize: analysisBlockSize
+            )
+        }
+    }
+
+    /// Compute the best frequency offset by finding the peak correlation
+    /// - Parameter samples: Audio samples to analyze
+    /// - Returns: Best frequency offset in Hz
+    private func computeAFCCorrection(samples: [Float]) -> Float {
+        var bestOffset: Float = 0
+        var bestCorrelation: Float = -2.0
+
+        for (offset, var markFilter) in markOffsetFilters {
+            guard var spaceFilter = spaceOffsetFilters[offset] else { continue }
+
+            let markPower = markFilter.processBlock(samples)
+            let spacePower = spaceFilter.processBlock(samples)
+
+            markFilter.reset()
+            spaceFilter.reset()
+
+            // Update filters in dictionaries
+            markOffsetFilters[offset] = markFilter
+            spaceOffsetFilters[offset] = spaceFilter
+
+            let total = markPower + spacePower
+            guard total > 0.001 else { continue }
+
+            // Use absolute correlation (signal strength at this offset)
+            let correlation = abs(markPower - spacePower) / total
+
+            if correlation > bestCorrelation {
+                bestCorrelation = correlation
+                bestOffset = offset
+            }
+        }
+
+        return bestOffset
+    }
+
+    /// Apply frequency correction to the demodulator filters
+    /// - Parameter correction: Frequency correction in Hz
+    private func applyFrequencyCorrection(_ correction: Float) {
+        let newMarkFreq = configuration.markFrequency + Double(correction)
+
+        // Update main Goertzel filters
+        markFilter = GoertzelFilter(
+            frequency: newMarkFreq,
+            sampleRate: configuration.sampleRate,
+            blockSize: analysisBlockSize
+        )
+        spaceFilter = GoertzelFilter(
+            frequency: newMarkFreq - configuration.shift,
+            sampleRate: configuration.sampleRate,
+            blockSize: analysisBlockSize
+        )
+
+        // Update bandpass filter center
+        bandpassFilter = BandpassFilter(
+            markFrequency: newMarkFreq,
+            spaceFrequency: newMarkFreq - configuration.shift,
+            margin: 75.0,
+            sampleRate: configuration.sampleRate
+        )
+
+        // Rebuild offset filters around new center
+        initializeAFCFilters()
     }
 
     // MARK: - Processing
@@ -238,6 +352,23 @@ public final class FSKDemodulator {
             updateCorrelationHistory(correlation)
             updateNoiseFloor(correlation)
             updateSignalDetection()
+
+            // AFC update: periodically check for frequency drift
+            if afcEnabled {
+                afcBlockCounter += 1
+                if afcBlockCounter >= afcUpdateInterval {
+                    let correction = computeAFCCorrection(samples: sampleBuffer)
+                    // Low-pass filter the correction for smooth tracking
+                    frequencyCorrection = frequencyCorrection * (1 - afcAlpha) + correction * afcAlpha
+
+                    // Apply correction if significant (> 5 Hz)
+                    if abs(frequencyCorrection) > 5.0 {
+                        applyFrequencyCorrection(frequencyCorrection)
+                    }
+                    afcBlockCounter = 0
+                }
+            }
+
             processStateMachine(correlation: correlation)
             sampleBuffer.removeAll(keepingCapacity: true)
         }
@@ -492,6 +623,10 @@ public final class FSKDemodulator {
         agcGain = 1.0
         noiseFloor = 0.1
         lastCharacterConfidence = 0
+
+        // Reset AFC state
+        frequencyCorrection = 0
+        afcBlockCounter = 0
     }
 
     /// Tune to a different center frequency

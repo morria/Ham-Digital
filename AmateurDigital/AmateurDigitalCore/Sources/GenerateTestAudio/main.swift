@@ -226,6 +226,255 @@ func generatePSK31MultiChannelTest() throws {
     print()
 }
 
+// MARK: - Drifting RTTY Test (for AFC testing)
+
+/// Generate RTTY audio with linear frequency drift
+/// - Parameters:
+///   - text: Text to transmit
+///   - startOffset: Frequency offset at start in Hz
+///   - endOffset: Frequency offset at end in Hz
+///   - configuration: Base RTTY configuration
+/// - Returns: Audio samples with drifting frequency
+func generateDriftingRTTY(
+    text: String,
+    startOffset: Double,
+    endOffset: Double,
+    configuration: RTTYConfiguration
+) -> [Float] {
+    let codec = BaudotCodec()
+    let codes = codec.encodeWithPreamble(text)
+
+    // Calculate total samples
+    let samplesPerChar = Int(7.5 * Double(configuration.samplesPerBit))
+    let preambleSamples = Int(0.2 * configuration.sampleRate)  // 200ms preamble
+    let postambleSamples = Int(0.1 * configuration.sampleRate)  // 100ms postamble
+    let messageSamples = codes.count * samplesPerChar
+    let totalSamples = preambleSamples + messageSamples + postambleSamples
+
+    var samples = [Float]()
+    samples.reserveCapacity(totalSamples)
+
+    var phase: Double = 0
+    let sampleRate = configuration.sampleRate
+    let samplesPerBit = configuration.samplesPerBit
+
+    // Helper to generate a tone with drifting frequency
+    func generateTone(isMarkTone: Bool, count: Int, currentIndex: Int) -> [Float] {
+        var toneSamples = [Float]()
+        toneSamples.reserveCapacity(count)
+
+        for i in 0..<count {
+            let sampleIndex = currentIndex + i
+            let progress = Double(sampleIndex) / Double(totalSamples)
+            let currentOffset = startOffset + (endOffset - startOffset) * progress
+
+            let baseFreq = isMarkTone ? configuration.markFrequency : configuration.spaceFrequency
+            let freq = baseFreq + currentOffset
+
+            phase += 2.0 * .pi * freq / sampleRate
+            if phase > 2.0 * .pi {
+                phase -= 2.0 * .pi
+            }
+
+            toneSamples.append(Float(sin(phase)))
+        }
+        return toneSamples
+    }
+
+    var currentIndex = 0
+
+    // Preamble (mark tone)
+    samples.append(contentsOf: generateTone(isMarkTone: true, count: preambleSamples, currentIndex: currentIndex))
+    currentIndex += preambleSamples
+
+    // Message
+    for code in codes {
+        // Start bit (space)
+        samples.append(contentsOf: generateTone(isMarkTone: false, count: samplesPerBit, currentIndex: currentIndex))
+        currentIndex += samplesPerBit
+
+        // 5 data bits, LSB first
+        for bitIndex in 0..<5 {
+            let bit = (code >> bitIndex) & 0x01
+            let isMarkBit = bit == 1
+            samples.append(contentsOf: generateTone(isMarkTone: isMarkBit, count: samplesPerBit, currentIndex: currentIndex))
+            currentIndex += samplesPerBit
+        }
+
+        // Stop bits (1.5 bits of mark)
+        let stopSamples = Int(1.5 * Double(samplesPerBit))
+        samples.append(contentsOf: generateTone(isMarkTone: true, count: stopSamples, currentIndex: currentIndex))
+        currentIndex += stopSamples
+    }
+
+    // Postamble (mark tone)
+    samples.append(contentsOf: generateTone(isMarkTone: true, count: postambleSamples, currentIndex: currentIndex))
+
+    return samples
+}
+
+func generateDriftingRTTYTests() throws {
+    print("=== Drifting RTTY Tests (for AFC) ===")
+    print()
+
+    let config = RTTYConfiguration.standard
+    let text = "CQ CQ CQ DE W1AW W1AW W1AW K"
+
+    // Test 1: 50 Hz drift (within AFC range)
+    print("Test 1: RTTY with +50 Hz drift (0 to +50 Hz)")
+    let samples50Hz = generateDriftingRTTY(
+        text: text,
+        startOffset: 0,
+        endOffset: 50,
+        configuration: config
+    )
+    let path50Hz = "/tmp/rtty_drift_50hz.wav"
+    try writeWAV(samples: samples50Hz, sampleRate: config.sampleRate, to: path50Hz)
+    print("  Written to: \(path50Hz)")
+    print()
+
+    // Test 2: 25 Hz drift (moderate)
+    print("Test 2: RTTY with ±25 Hz drift (-25 to +25 Hz)")
+    let samples25Hz = generateDriftingRTTY(
+        text: text,
+        startOffset: -25,
+        endOffset: 25,
+        configuration: config
+    )
+    let path25Hz = "/tmp/rtty_drift_25hz.wav"
+    try writeWAV(samples: samples25Hz, sampleRate: config.sampleRate, to: path25Hz)
+    print("  Written to: \(path25Hz)")
+    print()
+
+    // Test 3: 100 Hz drift (beyond AFC range - should fail)
+    print("Test 3: RTTY with +100 Hz drift (0 to +100 Hz) - beyond AFC range")
+    let samples100Hz = generateDriftingRTTY(
+        text: text,
+        startOffset: 0,
+        endOffset: 100,
+        configuration: config
+    )
+    let path100Hz = "/tmp/rtty_drift_100hz.wav"
+    try writeWAV(samples: samples100Hz, sampleRate: config.sampleRate, to: path100Hz)
+    print("  Written to: \(path100Hz)")
+    print()
+
+    // Test 4: Negative drift
+    print("Test 4: RTTY with -40 Hz drift (0 to -40 Hz)")
+    let samplesNeg = generateDriftingRTTY(
+        text: text,
+        startOffset: 0,
+        endOffset: -40,
+        configuration: config
+    )
+    let pathNeg = "/tmp/rtty_drift_neg40hz.wav"
+    try writeWAV(samples: samplesNeg, sampleRate: config.sampleRate, to: pathNeg)
+    print("  Written to: \(pathNeg)")
+    print()
+}
+
+// MARK: - Difficulty Level Tests
+
+func generateDifficultyTests() throws {
+    print("=== Difficulty Level Tests ===")
+    print()
+
+    let sampleRate = 48000.0
+
+    // Level 8: Out-of-band interference
+    print("Level 8: RTTY with out-of-band interference (500 Hz tone)")
+    let config = RTTYConfiguration.standard
+    let modem = RTTYModem(configuration: config)
+    let text = "CQ CQ DE W1AW"
+
+    var samples = modem.encodeWithIdle(text: text, preambleMs: 200, postambleMs: 200)
+
+    // Add strong 500 Hz interference (well below RTTY passband at 1955-2125 Hz)
+    for i in 0..<samples.count {
+        let t = Double(i) / sampleRate
+        let interference = Float(sin(2.0 * .pi * 500.0 * t)) * 1.5
+        samples[i] += interference
+    }
+
+    let level8Path = "/tmp/rtty_level8_interference.wav"
+    try writeWAV(samples: samples, sampleRate: sampleRate, to: level8Path)
+    print("  Written to: \(level8Path)")
+    print()
+
+    // Level 5: Very heavy noise (10 dB SNR)
+    print("Level 5: RTTY with 10 dB SNR noise")
+    var cleanSamples = modem.encodeWithIdle(text: text, preambleMs: 200, postambleMs: 200)
+
+    // Calculate signal RMS
+    let signalPower = cleanSamples.map { $0 * $0 }.reduce(0, +) / Float(cleanSamples.count)
+    let signalRMS = sqrt(signalPower)
+    let noiseRMS = signalRMS / pow(10.0, 10.0 / 20.0)  // 10 dB SNR
+
+    // Add noise with simple LCG random
+    var seed: UInt64 = 42
+    for i in 0..<cleanSamples.count {
+        seed ^= seed >> 12
+        seed ^= seed << 25
+        seed ^= seed >> 27
+        let u1 = max(Double(seed &* 0x2545F4914F6CDD1D) / Double(UInt64.max), 0.0001)
+        seed ^= seed >> 12
+        seed ^= seed << 25
+        seed ^= seed >> 27
+        let u2 = Double(seed &* 0x2545F4914F6CDD1D) / Double(UInt64.max)
+        let noise = noiseRMS * Float(sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2))
+        cleanSamples[i] += noise
+    }
+
+    let level5Path = "/tmp/rtty_level5_noisy.wav"
+    try writeWAV(samples: cleanSamples, sampleRate: sampleRate, to: level5Path)
+    print("  Written to: \(level5Path)")
+    print()
+
+    // Level 7: Slow fading
+    print("Level 7: RTTY with slow fading (0.5 Hz)")
+    var fadingSamples = modem.encodeWithIdle(text: "TEST DE W1AW", preambleMs: 200, postambleMs: 200)
+    for i in 0..<fadingSamples.count {
+        let t = Double(i) / sampleRate
+        let fade = Float((1.0 + cos(2.0 * .pi * 0.5 * t)) / 2.0)  // 0.5 Hz fade
+        let amplitude = 0.3 + 0.7 * fade  // Fade between 30% and 100%
+        fadingSamples[i] *= amplitude
+    }
+
+    let level7Path = "/tmp/rtty_level7_fading.wav"
+    try writeWAV(samples: fadingSamples, sampleRate: sampleRate, to: level7Path)
+    print("  Written to: \(level7Path)")
+    print()
+
+    // PSK31 with noise
+    print("Level 4: PSK31 with 15 dB SNR noise")
+    let pskConfig = PSK31Configuration.standard
+    var pskMod = PSK31Modulator(configuration: pskConfig)
+    var pskSamples = pskMod.modulateTextWithEnvelope("cq de w1aw", preambleMs: 300, postambleMs: 200)
+
+    let pskPower = pskSamples.map { $0 * $0 }.reduce(0, +) / Float(pskSamples.count)
+    let pskRMS = sqrt(pskPower)
+    let pskNoiseRMS = pskRMS / pow(10.0, 15.0 / 20.0)  // 15 dB SNR
+
+    seed = 123
+    for i in 0..<pskSamples.count {
+        seed ^= seed >> 12
+        seed ^= seed << 25
+        seed ^= seed >> 27
+        let u1 = max(Double(seed &* 0x2545F4914F6CDD1D) / Double(UInt64.max), 0.0001)
+        seed ^= seed >> 12
+        seed ^= seed << 25
+        seed ^= seed >> 27
+        let u2 = Double(seed &* 0x2545F4914F6CDD1D) / Double(UInt64.max)
+        let noise = pskNoiseRMS * Float(sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2))
+        pskSamples[i] += noise
+    }
+
+    let pskNoisyPath = "/tmp/psk31_level4_noisy.wav"
+    try writeWAV(samples: pskSamples, sampleRate: pskConfig.sampleRate, to: pskNoisyPath)
+    print("  Written to: \(pskNoisyPath)")
+    print()
+}
+
 // MARK: - Main
 
 do {
@@ -237,6 +486,12 @@ do {
     try generatePSK31SingleChannelTest()
     try generatePSK31MultiChannelTest()
 
+    // Difficulty level tests
+    try generateDifficultyTests()
+
+    // AFC drift tests
+    try generateDriftingRTTYTests()
+
     print("=== Playback Instructions ===")
     print()
     print("RTTY:")
@@ -246,6 +501,18 @@ do {
     print("PSK31:")
     print("  Play single channel:  afplay /tmp/psk31_single_channel.wav")
     print("  Play multi-channel:   afplay /tmp/psk31_multi_channel.wav")
+    print()
+    print("Difficulty Levels:")
+    print("  Level 5 (10dB noise):  afplay /tmp/rtty_level5_noisy.wav")
+    print("  Level 7 (fading):      afplay /tmp/rtty_level7_fading.wav")
+    print("  Level 8 (interference): afplay /tmp/rtty_level8_interference.wav")
+    print("  PSK31 Level 4 (15dB):  afplay /tmp/psk31_level4_noisy.wav")
+    print()
+    print("AFC Drift Tests:")
+    print("  +50 Hz drift:  afplay /tmp/rtty_drift_50hz.wav")
+    print("  ±25 Hz drift:  afplay /tmp/rtty_drift_25hz.wav")
+    print("  +100 Hz drift: afplay /tmp/rtty_drift_100hz.wav (beyond AFC range)")
+    print("  -40 Hz drift:  afplay /tmp/rtty_drift_neg40hz.wav")
     print()
     print("To test with your phone:")
     print("1. Play the WAV file on your computer")

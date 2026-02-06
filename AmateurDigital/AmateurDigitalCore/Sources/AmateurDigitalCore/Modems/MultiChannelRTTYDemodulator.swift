@@ -106,6 +106,15 @@ public final class MultiChannelRTTYDemodulator {
         channelMap.count
     }
 
+    /// Whether AFC (Automatic Frequency Control) is enabled for all channels
+    public var afcEnabled: Bool = true {
+        didSet {
+            for demodulator in demodulators.values {
+                demodulator.afcEnabled = afcEnabled
+            }
+        }
+    }
+
     // MARK: - Initialization
 
     /// Create a multi-channel demodulator with specified frequencies
@@ -156,6 +165,7 @@ public final class MultiChannelRTTYDemodulator {
         let config = baseConfiguration.withCenterFrequency(frequency)
         let demodulator = FSKDemodulator(configuration: config)
         demodulator.delegate = self
+        demodulator.afcEnabled = afcEnabled
 
         demodulators[channel.id] = demodulator
         channelMap[channel.id] = channel

@@ -9,7 +9,7 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
 
     var body: some View {
-        ModeSelectionView()
+        AdaptiveContentView()
     }
 }
 
