@@ -2,7 +2,7 @@
 
 ## Promotional Text
 <!-- 170 characters max. Can be updated without a new app version. -->
-Decode and transmit RTTY, PSK31, and other ham radio digital modes with a familiar iMessage-style chat interface. Free, open source, and no ads.
+Decode and transmit RTTY, PSK31, and other ham radio digital modes with a familiar chat interface. Free, open source, and no ads.
 
 ## Description
 <!-- 4,000 characters max -->
@@ -44,16 +44,16 @@ REQUIREMENTS
 RTTY,PSK31,ham,radio,HF,teletype,Baudot,Varicode,morse,shortwave,transceiver,QSO,decode,CW,SDR
 
 ## Support URL
-https://amateurdigital.app/support.html
+https://w2asm.com/amateur-digital/support.html
 
 ## Marketing URL
-https://amateurdigital.app
+https://w2asm.com/amateur-digital/
 
 ## Version
 1.0
 
 ## Copyright
-2026 Andrew S. Morria
+2026 Andrew Morrison
 
 ## Routing App Coverage File
 N/A
