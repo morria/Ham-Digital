@@ -515,6 +515,35 @@ class ModemService: ObservableObject {
         #endif
     }
 
+    // MARK: - Per-Channel RTTY Settings
+
+    /// Set baud rate for a specific RTTY channel by frequency
+    func setChannelBaudRate(_ baudRate: Double, atFrequency frequency: Double) {
+        #if canImport(AmateurDigitalCore)
+        guard let demod = multiChannelDemodulator,
+              let channelId = demod.channelId(near: frequency) else { return }
+        demod.setBaudRate(baudRate, forChannel: channelId)
+        #endif
+    }
+
+    /// Set polarity inversion for a specific RTTY channel by frequency
+    func setChannelPolarity(inverted: Bool, atFrequency frequency: Double) {
+        #if canImport(AmateurDigitalCore)
+        guard let demod = multiChannelDemodulator,
+              let channelId = demod.channelId(near: frequency) else { return }
+        demod.setPolarity(inverted: inverted, forChannel: channelId)
+        #endif
+    }
+
+    /// Set frequency offset for a specific RTTY channel by frequency
+    func setChannelFrequencyOffset(_ offset: Double, atFrequency frequency: Double) {
+        #if canImport(AmateurDigitalCore)
+        guard let demod = multiChannelDemodulator,
+              let channelId = demod.channelId(near: frequency) else { return }
+        demod.setFrequencyOffset(offset, forChannel: channelId)
+        #endif
+    }
+
     // MARK: - Control
 
     /// Reset modem state for current mode

@@ -107,7 +107,7 @@ public final class MultiChannelRTTYDemodulator {
     }
 
     /// Whether AFC (Automatic Frequency Control) is enabled for all channels
-    public var afcEnabled: Bool = false {
+    public var afcEnabled: Bool = true {
         didSet {
             for demodulator in demodulators.values {
                 demodulator.afcEnabled = afcEnabled
@@ -205,6 +205,56 @@ public final class MultiChannelRTTYDemodulator {
     /// - Returns: Channel with that ID, or nil
     public func channel(withId id: UUID) -> RTTYChannel? {
         channelMap[id]
+    }
+
+    // MARK: - Per-Channel Settings
+
+    /// Set baud rate for a specific channel
+    /// Creates a new FSKDemodulator with the new baud rate, preserving other settings
+    /// - Parameters:
+    ///   - baudRate: New baud rate (e.g. 45.45, 50.0, 75.0)
+    ///   - channelId: Channel to modify
+    public func setBaudRate(_ baudRate: Double, forChannel channelId: UUID) {
+        guard let oldDemod = demodulators[channelId],
+              let channel = channelMap[channelId] else { return }
+
+        let config = baseConfiguration
+            .withCenterFrequency(channel.frequency)
+            .withBaudRate(baudRate)
+        let newDemod = FSKDemodulator(configuration: config)
+        newDemod.delegate = self
+        newDemod.afcEnabled = oldDemod.afcEnabled
+        newDemod.squelchLevel = oldDemod.squelchLevel
+        newDemod.polarityInverted = oldDemod.polarityInverted
+        demodulators[channelId] = newDemod
+    }
+
+    /// Set polarity inversion for a specific channel
+    /// - Parameters:
+    ///   - inverted: Whether to invert mark/space interpretation
+    ///   - channelId: Channel to modify
+    public func setPolarity(inverted: Bool, forChannel channelId: UUID) {
+        demodulators[channelId]?.polarityInverted = inverted
+    }
+
+    /// Set frequency offset for a specific channel
+    /// Tunes the channel's demodulator to frequency + offset
+    /// - Parameters:
+    ///   - offset: Frequency offset in Hz
+    ///   - channelId: Channel to modify
+    public func setFrequencyOffset(_ offset: Double, forChannel channelId: UUID) {
+        guard let channel = channelMap[channelId] else { return }
+        demodulators[channelId]?.tune(to: channel.frequency + offset)
+    }
+
+    /// Find the channel ID closest to a given frequency
+    /// - Parameter frequency: Frequency to search near
+    /// - Returns: Channel ID if found within ±50 Hz, nil otherwise
+    public func channelId(near frequency: Double) -> UUID? {
+        channelMap.values
+            .filter { abs($0.frequency - frequency) < 50.0 }
+            .min(by: { abs($0.frequency - frequency) < abs($1.frequency - frequency) })?
+            .id
     }
 
     // MARK: - Processing

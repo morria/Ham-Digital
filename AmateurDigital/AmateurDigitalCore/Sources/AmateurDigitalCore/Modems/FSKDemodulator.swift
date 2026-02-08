@@ -164,6 +164,9 @@ public final class FSKDemodulator {
     /// Manual squelch level override (0.0-1.0). Set to 0 to use adaptive squelch.
     public var squelchLevel: Float = 0
 
+    /// Whether polarity is inverted (swaps mark/space interpretation)
+    public var polarityInverted: Bool = false
+
     /// Effective squelch level (uses manual if set, otherwise adaptive)
     private var effectiveSquelchLevel: Float {
         squelchLevel > 0 ? squelchLevel : adaptiveSquelchLevel
@@ -447,7 +450,8 @@ public final class FSKDemodulator {
         let total = markPower + spacePower
         guard total > 0.001 else { return 0 }  // Silence
 
-        return (markPower - spacePower) / total
+        let correlation = (markPower - spacePower) / total
+        return polarityInverted ? -correlation : correlation
     }
 
     /// Update the correlation history for smoothing

@@ -15,6 +15,9 @@ struct Channel: Identifiable, Equatable, Hashable {
     var lastActivity: Date
     var decodingBuffer: String   // Currently being decoded (real-time)
     var squelch: Int             // Per-channel squelch threshold (0-100)
+    var rttyBaudRate: Double     // Per-channel RTTY baud rate (45.45, 50, 75)
+    var polarityInverted: Bool   // Per-channel polarity inversion
+    var frequencyOffset: Int     // Per-channel frequency offset in Hz (±50)
 
     /// Default squelch threshold for new channels
     static let defaultSquelch = 0
@@ -26,7 +29,10 @@ struct Channel: Identifiable, Equatable, Hashable {
         messages: [Message] = [],
         lastActivity: Date = Date(),
         decodingBuffer: String = "",
-        squelch: Int = Channel.defaultSquelch
+        squelch: Int = Channel.defaultSquelch,
+        rttyBaudRate: Double = 45.45,
+        polarityInverted: Bool = false,
+        frequencyOffset: Int = 0
     ) {
         self.id = id
         self.frequency = frequency
@@ -35,6 +41,9 @@ struct Channel: Identifiable, Equatable, Hashable {
         self.lastActivity = lastActivity
         self.decodingBuffer = decodingBuffer
         self.squelch = squelch
+        self.rttyBaudRate = rttyBaudRate
+        self.polarityInverted = polarityInverted
+        self.frequencyOffset = frequencyOffset
     }
 
     /// Display name: callsign if known, otherwise frequency
@@ -50,7 +59,7 @@ struct Channel: Identifiable, Equatable, Hashable {
     }
 
     /// Preview text for channel list
-    /// Shows the tail (most recent 2 lines) of real-time decoding buffer or last message
+    /// Shows the tail of real-time decoding buffer or last message
     var previewText: String {
         let raw: String
         if !decodingBuffer.isEmpty {
@@ -61,12 +70,12 @@ struct Channel: Identifiable, Equatable, Hashable {
             return ""
         }
 
-        // Split into lines, take the last 2 non-empty lines
-        let lines = raw.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        let tail = lines.suffix(2)
-        return tail.joined(separator: "\n")
+        // Return a generous tail of the content (last 300 chars)
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > 300 {
+            return String(trimmed.suffix(300))
+        }
+        return trimmed
     }
 
     /// Time since last activity

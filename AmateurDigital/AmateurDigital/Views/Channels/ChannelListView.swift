@@ -103,10 +103,18 @@ struct ChannelSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var squelch: Double = 0
+    @State private var baudRate: Double = 45.45
+    @State private var polarityInverted: Bool = false
+    @State private var frequencyOffset: Double = 0
 
     /// Look up current channel from viewModel to get live data
     private var channel: Channel? {
         viewModel.channels.first { $0.id == channelID }
+    }
+
+    /// Whether to show RTTY-specific settings
+    private var isRTTY: Bool {
+        viewModel.selectedMode == .rtty
     }
 
     init(channel: Channel, viewModel: ChatViewModel) {
@@ -137,24 +145,73 @@ struct ChannelSettingsSheet: View {
                     }
 
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Squelch")
-                                Spacer()
-                                Text("\(Int(squelch))")
-                                    .foregroundColor(.secondary)
-                                    .monospacedDigit()
+                        Picker("Squelch", selection: Binding(
+                            get: { SquelchLevel.closest(to: squelch / 100.0) },
+                            set: { level in
+                                squelch = level.rawValue * 100.0
+                                saveSquelch(Int(level.rawValue * 100.0))
                             }
-
-                            Slider(value: $squelch, in: 0...100, step: 1)
-                                .onChange(of: squelch) { _, newValue in
-                                    saveSquelch(Int(newValue))
-                                }
+                        )) {
+                            ForEach(SquelchLevel.allCases) { level in
+                                Text(level.label).tag(level)
+                            }
                         }
+                        .pickerStyle(.segmented)
                     } header: {
                         Text("Signal Threshold")
                     } footer: {
-                        Text("Higher values require stronger signals before decoding. Set to 0 to decode all signals.")
+                        Text("Higher values require stronger signals before decoding. Off decodes all signals.")
+                    }
+
+                    if isRTTY {
+                        Section {
+                            Picker("Baud Rate", selection: $baudRate) {
+                                Text("45.45").tag(45.45)
+                                Text("50").tag(50.0)
+                                Text("75").tag(75.0)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: baudRate) { _, newValue in
+                                viewModel.setChannelBaudRate(newValue, for: channelID)
+                            }
+                        } header: {
+                            Text("Baud Rate")
+                        } footer: {
+                            Text("45.45 is standard amateur RTTY. 50 baud is common in Europe.")
+                        }
+
+                        Section {
+                            Toggle("Invert Polarity", isOn: $polarityInverted)
+                                .onChange(of: polarityInverted) { _, newValue in
+                                    viewModel.setChannelPolarity(inverted: newValue, for: channelID)
+                                }
+                        } header: {
+                            Text("Polarity")
+                        } footer: {
+                            Text("Swap mark and space tones. Try this if you see garbled text from a station.")
+                        }
+
+                        Section {
+                            HStack {
+                                Text("\(Int(frequencyOffset)) Hz")
+                                    .monospacedDigit()
+                                    .frame(width: 56, alignment: .trailing)
+                                Slider(value: $frequencyOffset, in: -50...50, step: 1)
+                                    .onChange(of: frequencyOffset) { _, newValue in
+                                        viewModel.setChannelFrequencyOffset(Int(newValue), for: channelID)
+                                    }
+                                Button("Reset") {
+                                    frequencyOffset = 0
+                                    viewModel.setChannelFrequencyOffset(0, for: channelID)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(frequencyOffset == 0)
+                            }
+                        } header: {
+                            Text("Frequency Offset")
+                        } footer: {
+                            Text("Fine-tune the receive frequency to improve decoding. AFC handles small drifts automatically.")
+                        }
                     }
                 }
                 .navigationTitle("Channel Settings")
@@ -170,12 +227,15 @@ struct ChannelSettingsSheet: View {
                 ContentUnavailableView("Channel Not Found", systemImage: "exclamationmark.triangle")
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([isRTTY ? .large : .medium])
         .onAppear {
-            // Load current value when sheet appears
+            // Load current values when sheet appears
             if let channel = channel {
                 squelch = Double(channel.squelch)
-                print("[ChannelSettings] Loaded squelch \(channel.squelch) for channel \(channelID)")
+                baudRate = channel.rttyBaudRate
+                polarityInverted = channel.polarityInverted
+                frequencyOffset = Double(channel.frequencyOffset)
+                print("[ChannelSettings] Loaded settings for channel \(channelID)")
             }
         }
     }

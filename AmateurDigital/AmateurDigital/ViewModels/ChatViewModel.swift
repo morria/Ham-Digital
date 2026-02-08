@@ -248,11 +248,25 @@ class ChatViewModel: ObservableObject {
     }
 
     func deleteChannels(at offsets: IndexSet) {
+        // Clean up tracking state for deleted channels
+        for index in offsets {
+            if index < channels.count {
+                let frequency = Double(channels[index].frequency)
+                lastDecodeTime[frequency] = nil
+                lastReceivedContentTime[frequency] = nil
+                decodingMode[frequency] = nil
+            }
+        }
         channels.remove(atOffsets: offsets)
     }
 
     func deleteChannel(_ channel: Channel) {
+        let frequency = Double(channel.frequency)
         channels.removeAll { $0.id == channel.id }
+        // Clean up per-frequency tracking state so new channels on this frequency start fresh
+        lastDecodeTime[frequency] = nil
+        lastReceivedContentTime[frequency] = nil
+        decodingMode[frequency] = nil
     }
 
     /// Clear all channels and reset decode state for the current mode
@@ -308,6 +322,29 @@ class ChatViewModel: ObservableObject {
         )
         channels.insert(newChannel, at: 0)
         return newChannel
+    }
+
+    // MARK: - Per-Channel RTTY Settings
+
+    /// Set baud rate for a specific RTTY channel
+    func setChannelBaudRate(_ baudRate: Double, for channelId: UUID) {
+        guard let index = channels.firstIndex(where: { $0.id == channelId }) else { return }
+        channels[index].rttyBaudRate = baudRate
+        modemService.setChannelBaudRate(baudRate, atFrequency: Double(channels[index].frequency))
+    }
+
+    /// Set polarity inversion for a specific RTTY channel
+    func setChannelPolarity(inverted: Bool, for channelId: UUID) {
+        guard let index = channels.firstIndex(where: { $0.id == channelId }) else { return }
+        channels[index].polarityInverted = inverted
+        modemService.setChannelPolarity(inverted: inverted, atFrequency: Double(channels[index].frequency))
+    }
+
+    /// Set frequency offset for a specific RTTY channel
+    func setChannelFrequencyOffset(_ offset: Int, for channelId: UUID) {
+        guard let index = channels.firstIndex(where: { $0.id == channelId }) else { return }
+        channels[index].frequencyOffset = offset
+        modemService.setChannelFrequencyOffset(Double(offset), atFrequency: Double(channels[index].frequency))
     }
 
     // MARK: - Private Methods
@@ -424,13 +461,17 @@ class ChatViewModel: ObservableObject {
             initialSquelch = 0
         }
 
-        // Create new channel with initial squelch from global settings
+        // Get initial RTTY baud rate from global settings
+        let initialBaudRate = mode == .rtty ? settings.rttyBaudRate : 45.45
+
+        // Create new channel with initial squelch and RTTY settings from global settings
         let newChannel = Channel(
             frequency: Int(frequency),
             callsign: nil,
             messages: [],
             lastActivity: Date(),
-            squelch: initialSquelch
+            squelch: initialSquelch,
+            rttyBaudRate: initialBaudRate
         )
         modeChannels.append(newChannel)
         channelsByMode[mode] = modeChannels
