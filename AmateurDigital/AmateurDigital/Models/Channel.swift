@@ -67,31 +67,29 @@ struct Channel: Identifiable, Equatable, Hashable {
     }
 
     /// Preview text for channel list
-    /// Shows the latest decoded content combining last message and real-time buffer
+    /// Shows the tail of the last message content plus any live decoding buffer
     var previewText: String {
-        // Combine last message content with current decoding buffer
-        var parts: [String] = []
-
-        if let lastContent = messages.last?.content {
-            let trimmed = lastContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                parts.append(trimmed)
-            }
-        }
-
         let bufferTrimmed = decodingBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !bufferTrimmed.isEmpty {
-            parts.append(bufferTrimmed)
+        let lastContent = messages.last?.content ?? ""
+
+        // Combine last message content with live buffer (buffer will be
+        // appended to the message on next flush, so this previews that state)
+        let text: String
+        if !lastContent.isEmpty && !bufferTrimmed.isEmpty {
+            text = lastContent + bufferTrimmed
+        } else if !bufferTrimmed.isEmpty {
+            text = bufferTrimmed
+        } else {
+            text = lastContent
         }
 
-        guard !parts.isEmpty else { return "" }
+        guard !text.isEmpty else { return "" }
 
-        let combined = parts.joined(separator: " ")
         // Return a generous tail (last 300 chars) for up to 2 lines of display
-        if combined.count > 300 {
-            return String(combined.suffix(300))
+        if text.count > 300 {
+            return String(text.suffix(300))
         }
-        return combined
+        return text
     }
 
     /// Time since last activity
@@ -119,7 +117,13 @@ struct Channel: Identifiable, Equatable, Hashable {
     }
 
     static func == (lhs: Channel, rhs: Channel) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.decodingBuffer == rhs.decodingBuffer &&
+        lhs.messages.count == rhs.messages.count &&
+        lhs.messages.last?.content == rhs.messages.last?.content &&
+        lhs.callsign == rhs.callsign &&
+        lhs.lastActivity == rhs.lastActivity &&
+        lhs.isLikelyLegitimate == rhs.isLikelyLegitimate
     }
 
     func hash(into hasher: inout Hasher) {

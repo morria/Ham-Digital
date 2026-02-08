@@ -98,6 +98,34 @@ struct FeatureExtractorTests {
         let features = FeatureExtractor.extractFeatures(from: longText)
         #expect(features["len"] == 1.0)
     }
+
+    @Test("Word-level features for multi-word text")
+    func wordFeatures() {
+        let features = FeatureExtractor.extractFeatures(from: "CQ DE W1AW")
+        #expect(features["max_word_len"]! > 0)
+        #expect(features["avg_word_len"]! > 0)
+        #expect(features["word_count"]! > 0)
+        // max word is W1AW = 4 chars → 4/20 = 0.2
+        #expect(features["max_word_len"] == 0.2)
+    }
+
+    @Test("Vowel ratio for normal text vs consonant-heavy noise")
+    func vowelRatio() {
+        let ham = FeatureExtractor.extractFeatures(from: "CQ CQ CQ DE W1AW K")
+        let noise = FeatureExtractor.extractFeatures(from: "KQHDAHQZKFBLMGOC")
+        // Noise should have lower vowel ratio
+        #expect(noise["vowel_ratio"]! < ham["vowel_ratio"]!)
+    }
+
+    @Test("Repeated pair ratio for text with adjacent duplicates")
+    func repeatedPairRatio() {
+        let features = FeatureExtractor.extractFeatures(from: "AABBCC")
+        // AA, BB, CC = 3 pairs out of 5 transitions = 0.6
+        #expect(abs(features["repeated_pair_ratio"]! - 0.6) < 0.01)
+
+        let noPairs = FeatureExtractor.extractFeatures(from: "ABCDEF")
+        #expect(noPairs["repeated_pair_ratio"] == 0.0)
+    }
 }
 
 // MARK: - Classifier Integration Tests
@@ -206,6 +234,20 @@ struct HamTextClassifierIntegrationTests {
     func randomSpaced() {
         let result = classifier.classify("asjkdf lqwer poiuyt zxcvb")
         #expect(!result.isLegitimate)
+    }
+
+    @Test("Garbled RTTY decode noise is garbage")
+    func garbledRTTY() {
+        let garbled = [
+            "Q XHNHMM N.CTSTMM2MMRXESTN0..,",
+            "ETRTELLTZZDIIFA7",
+            "XEMM NMVRATNMMMKOTET",
+            "KQHDAHQZKFBLMGOC",
+        ]
+        for text in garbled {
+            let result = classifier.classify(text)
+            #expect(!result.isLegitimate, "Expected '\(text)' to be garbage but was classified as legitimate")
+        }
     }
 }
 

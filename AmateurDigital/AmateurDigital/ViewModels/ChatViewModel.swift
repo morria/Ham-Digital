@@ -442,8 +442,8 @@ class ChatViewModel: ObservableObject {
 
     /// Classify channel content as legitimate ham radio or noise.
     /// Gated to avoid excessive CoreML inference:
-    /// - Requires ≥5 chars and at least one space before first run
-    /// - Re-runs only every 5 new characters
+    /// - Requires ≥5 chars before first run
+    /// - Re-runs only every 3 new characters
     /// - Stops once classified as legitimate, or after 48 chars still negative
     private func classifyChannel(at channelIndex: Int, for mode: DigitalMode) {
         guard let classifier = textClassifier else { return }
@@ -456,14 +456,14 @@ class ChatViewModel: ObservableObject {
         let text = modeChannels[channelIndex].previewText
         let length = text.count
 
-        // Need at least 5 chars and one space (word boundary)
-        guard length >= 5, text.contains(" ") else { return }
+        // Need at least 5 chars
+        guard length >= 5 else { return }
 
         // Stop checking after 48 chars if still negative
         if modeChannels[channelIndex].isLikelyLegitimate == false, length > 48 { return }
 
-        // Only re-run every 5 characters of new content
-        guard length >= modeChannels[channelIndex].classifiedAtLength + 5 else { return }
+        // Only re-run every 3 characters of new content
+        guard length >= modeChannels[channelIndex].classifiedAtLength + 3 else { return }
 
         let result = classifier.classify(text)
         modeChannels[channelIndex].isLikelyLegitimate = result.isLegitimate
@@ -478,7 +478,7 @@ class ChatViewModel: ObservableObject {
     /// Gated to avoid excessive CoreML inference:
     /// - Only runs after classification marks channel as legitimate
     /// - Requires ≥5 chars
-    /// - Re-runs only every 5 new characters
+    /// - Re-runs only every 3 new characters
     /// - Stops once a callsign is found
     private func extractChannelCallsign(at channelIndex: Int, for mode: DigitalMode) {
         guard let extractor = callsignExtractor else { return }
@@ -495,8 +495,8 @@ class ChatViewModel: ObservableObject {
         let length = text.count
         guard length >= 5 else { return }
 
-        // Only re-run every 5 characters of new content
-        guard length >= modeChannels[channelIndex].extractedAtLength + 5 else { return }
+        // Only re-run every 3 characters of new content
+        guard length >= modeChannels[channelIndex].extractedAtLength + 3 else { return }
 
         modeChannels[channelIndex].extractedAtLength = length
         if let callsign = extractor.extractCallsign(text) {

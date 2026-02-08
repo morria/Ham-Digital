@@ -3,240 +3,264 @@
     "text": "CQ CQ CQ DE W1AW K",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9987997694771678
+    "confidence": 0.999455166951031
   },
   {
     "text": "CQ CQ CQ DE W1AW W1AW K",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.998961520181469
+    "confidence": 0.9994178814271026
   },
   {
     "text": "W1AW DE K3LR UR RST 599 599 NAME IS BOB QTH IS PITTSBURGH K",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.999971338232537
+    "confidence": 0.9999823962041582
   },
   {
     "text": "CQ W1AW FN31",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9953121898222318
+    "confidence": 0.9982286169968504
   },
   {
     "text": "W1AW K3LR -15",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9986554640040629
+    "confidence": 0.999666328003159
   },
   {
     "text": "W1AW K3LR RR73",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9999728257221722
+    "confidence": 0.9999979538078769
   },
   {
     "text": "W1AW K3LR 73",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9955643464158103
+    "confidence": 0.9973961626529738
   },
   {
     "text": "CQ DX VK2ABC QF56",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9976268158909352
+    "confidence": 0.9981355182840732
   },
   {
     "text": "Hello Bob, thanks for the call. Your RST is 599. de W1AW",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9999998051572891
+    "confidence": 0.9999999886185312
   },
   {
     "text": "W1AW position 40.7128 -74.0060",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9998381675273115
+    "confidence": 0.999805307976135
   },
   {
     "text": "Net check-in de W1AW all ok",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9959662481091407
+    "confidence": 0.9975898099948373
   },
   {
     "text": "VVV VVV VVV DE W1AW W1AW BEACON FN31 QSL VIA BUREAU",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.998790912806363
+    "confidence": 0.9999783554909921
   },
   {
     "text": "My rig is a IC-7300 running 100w into a dipole on 20M.",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9999781975198073
+    "confidence": 0.9999655755579292
   },
   {
     "text": "CQ TEST W1AW FN31",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9996464423820977
+    "confidence": 0.9997337814606092
   },
   {
     "text": "TU W1AW DE K3LR QRZ?",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.994008691792165
+    "confidence": 0.9966883973784559
   },
   {
     "text": "CQ POTA W1AW FN31",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.997416545990294
+    "confidence": 0.999547964098651
   },
   {
     "text": "EMERGENCY de W1AW: Need assistance at grid FN31pr",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9992169864137402
+    "confidence": 0.9998848804483391
   },
   {
     "text": "K3LR DE W1AW 5NN 0001 0001",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9952818877315361
+    "confidence": 0.9970489154264682
   },
   {
     "text": "Weather in Boston is clear, temperature 72F. Nice day for radio!",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9998370928918979
+    "confidence": 0.9998474960224878
   },
   {
     "text": "Been a ham for 25 years now. Running IC-7300 into a 3 el yagi.",
     "expected_label": 1,
     "predicted_label": 1,
-    "confidence": 0.9999338223229777
+    "confidence": 0.9996771487050113
   },
   {
     "text": "xkjr89#$@mz!pq",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999993373574463
+    "confidence": 0.9999999744795817
   },
   {
     "text": "aaaaaaaaaaaaaaaaaaa",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999996172233
+    "confidence": 0.9999999999991881
   },
   {
     "text": "QQQQQQQQQQQQQ",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999997723970765
+    "confidence": 0.9999999999967584
   },
   {
     "text": "123456789012345",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999964174742969
+    "confidence": 0.9999992776671529
   },
   {
     "text": "!@#$%^&*()_+-=[]{}|",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999933271478
+    "confidence": 0.9999999998002206
   },
   {
     "text": "asjkdf lqwer poiuyt",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999954558225101
+    "confidence": 0.9999871569648044
   },
   {
     "text": "zxcvbnm asdfghjkl qwertyuiop",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999459304376
+    "confidence": 0.9999998850995668
   },
   {
     "text": ".........",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999006140398
+    "confidence": 0.9999999746438568
   },
   {
     "text": "###!!!***&&&",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999711681958
+    "confidence": 0.9999999963771373
   },
   {
     "text": "q w e r t y u i o p",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.98446854052945
+    "confidence": 0.9974095201634914
   },
   {
     "text": "8f#kL!mN@pQ3",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999982941918426
+    "confidence": 0.9999999556276216
   },
   {
     "text": "jjjjjjjjjjjjjjjjjjjj",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999999726963
+    "confidence": 0.9999999999999998
   },
   {
     "text": "XYZXYZXYZXYZXYZ",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999906706685923
+    "confidence": 0.9999999694217578
   },
   {
     "text": ")(*&^%$#@!~`",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999886608604
+    "confidence": 0.9999999973577474
   },
   {
     "text": "1a2b3c4d5e6f7g8h",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.995887412320559
+    "confidence": 0.9999527912776317
   },
   {
     "text": "   ...   ...   ",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999993774474
+    "confidence": 0.9999999295855779
   },
   {
     "text": "zzzzzzzzzzzzzzzzzzzz",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999999999989536
+    "confidence": 0.9999999999999997
   },
   {
     "text": "ab12cd34ef56gh78ij",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999984589611653
+    "confidence": 0.9999999795572205
   },
   {
     "text": "!a@b#c$d%e^f&g*h",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999997380181989
+    "confidence": 0.9999999964772819
   },
   {
     "text": "mnbvcxzlkjhgfdsa",
     "expected_label": 0,
     "predicted_label": 0,
-    "confidence": 0.9999997034348269
+    "confidence": 0.9999999942634905
+  },
+  {
+    "text": "Q XHNHMM N.CTSTMM2MMRXESTN0..,",
+    "expected_label": 0,
+    "predicted_label": 0,
+    "confidence": 0.9999994670649864
+  },
+  {
+    "text": "ETRTELLTZZDIIFA7",
+    "expected_label": 0,
+    "predicted_label": 0,
+    "confidence": 0.99999966139833
+  },
+  {
+    "text": "XEMM NMVRATNMMMKOTET",
+    "expected_label": 0,
+    "predicted_label": 0,
+    "confidence": 0.9999998673124318
+  },
+  {
+    "text": "KQHDAHQZKFBLMGOC",
+    "expected_label": 0,
+    "predicted_label": 0,
+    "confidence": 0.9999999723722861
   }
 ]

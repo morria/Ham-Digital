@@ -34,6 +34,11 @@ enum FeatureExtractor {
             features["upper_ratio"] = 0.0
             features["special_ratio"] = 0.0
             features["entropy"] = 0.0
+            features["max_word_len"] = 0.0
+            features["avg_word_len"] = 0.0
+            features["word_count"] = 0.0
+            features["vowel_ratio"] = 0.0
+            features["repeated_pair_ratio"] = 0.0
             return features
         }
 
@@ -88,6 +93,38 @@ enum FeatureExtractor {
                 let key = "tri_\(Character(c0))\(Character(c1))\(Character(c2))"
                 features[key, default: 0.0] += 1.0
             }
+        }
+
+        // Word-level features
+        let words = text.split(separator: " ")
+        if !words.isEmpty {
+            let wordLens = words.map { $0.count }
+            let maxWordLen = wordLens.max()!
+            let avgWordLen = Double(wordLens.reduce(0, +)) / Double(wordLens.count)
+            features["max_word_len"] = min(Double(maxWordLen) / 20.0, 1.0)
+            features["avg_word_len"] = min(avgWordLen / 10.0, 1.0)
+            features["word_count"] = min(Double(words.count) / 20.0, 1.0)
+        } else {
+            features["max_word_len"] = min(dLength / 20.0, 1.0)
+            features["avg_word_len"] = min(dLength / 10.0, 1.0)
+            features["word_count"] = 0.0
+        }
+
+        // Vowel ratio (among alpha chars only)
+        let vowelSet: Set<Unicode.Scalar> = ["A", "E", "I", "O", "U"]
+        let vowelCount = upperText.filter { vowelSet.contains($0) }.count
+        features["vowel_ratio"] = alphaCount > 0 ? Double(vowelCount) / Double(alphaCount) : 0.0
+
+        // Repeated adjacent character pairs
+        if length > 1 {
+            let chars = Array(text)
+            var repeated = 0
+            for i in 0..<(chars.count - 1) {
+                if chars[i] == chars[i + 1] { repeated += 1 }
+            }
+            features["repeated_pair_ratio"] = Double(repeated) / Double(length - 1)
+        } else {
+            features["repeated_pair_ratio"] = 0.0
         }
 
         // Pattern matches

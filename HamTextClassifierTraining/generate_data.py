@@ -489,6 +489,7 @@ def gen_garbage():
         gen_garbage_numeric,
         gen_garbage_short_noise,
         gen_garbage_mixed_symbols,
+        gen_garbage_garbled_rtty,
     ]
     return random.choice(generators)()
 
@@ -565,6 +566,32 @@ def gen_garbage_mixed_symbols():
     length = random.randint(10, 100)
     chars = LETTERS + DIGITS + "!@#$%^&*()[]{}|\\/<>~`"
     return "".join(random.choices(chars, k=length))
+
+
+def gen_garbage_garbled_rtty():
+    """Generate garbled RTTY-like noise: uppercase with occasional digits/punctuation."""
+    length = random.randint(5, 40)
+    chars = []
+    for _ in range(length):
+        r = random.random()
+        if r < 0.75:
+            chars.append(random.choice(LETTERS))
+        elif r < 0.88:
+            # Repeated char (bit error artifact)
+            c = random.choice(LETTERS)
+            chars.append(c)
+            chars.append(c)
+        elif r < 0.95:
+            chars.append(random.choice(DIGITS))
+        else:
+            chars.append(random.choice(".,;:"))
+    result = "".join(chars)
+    # Optionally insert 0-2 spaces
+    if random.random() < 0.4:
+        for _ in range(random.randint(1, 2)):
+            pos = random.randint(1, max(1, len(result) - 2))
+            result = result[:pos] + " " + result[pos:]
+    return result[:50]
 
 
 # --- Main ---

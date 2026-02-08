@@ -91,6 +91,29 @@ def extract_features(text):
             key = f"tri_{trigram}"
             features[key] = features.get(key, 0.0) + 1.0
 
+    # Word-level features
+    words = text.split()
+    if words:
+        word_lens = [len(w) for w in words]
+        features["max_word_len"] = min(max(word_lens) / 20.0, 1.0)
+        features["avg_word_len"] = min(sum(word_lens) / len(word_lens) / 10.0, 1.0)
+        features["word_count"] = min(len(words) / 20.0, 1.0)
+    else:
+        features["max_word_len"] = min(length / 20.0, 1.0)
+        features["avg_word_len"] = min(length / 10.0, 1.0)
+        features["word_count"] = 0.0
+
+    # Vowel ratio (among alpha chars only)
+    vowels = sum(1 for c in upper_text if c in "AEIOU")
+    features["vowel_ratio"] = vowels / alpha_count if alpha_count > 0 else 0.0
+
+    # Repeated adjacent character pairs
+    if length > 1:
+        repeated = sum(1 for i in range(length - 1) if text[i] == text[i + 1])
+        features["repeated_pair_ratio"] = repeated / (length - 1)
+    else:
+        features["repeated_pair_ratio"] = 0.0
+
     # Pattern matches
     features["has_callsign"] = 1.0 if CALLSIGN_RE.search(upper_text) else 0.0
     features["has_rst"] = 1.0 if RST_RE.search(text) else 0.0
@@ -231,6 +254,10 @@ def train():
         "ab12cd34ef56gh78ij",
         "!a@b#c$d%e^f&g*h",
         "mnbvcxzlkjhgfdsa",
+        "Q XHNHMM N.CTSTMM2MMRXESTN0..,",
+        "ETRTELLTZZDIIFA7",
+        "XEMM NMVRATNMMMKOTET",
+        "KQHDAHQZKFBLMGOC",
     ]
 
     for text in legit_samples:
