@@ -18,6 +18,10 @@ let package = Package(
             name: "GenerateTestAudio",
             targets: ["GenerateTestAudio"]
         ),
+        .executable(
+            name: "DecodeWAV",
+            targets: ["DecodeWAV"]
+        ),
     ],
     targets: [
         .target(
@@ -29,6 +33,11 @@ let package = Package(
             name: "GenerateTestAudio",
             dependencies: ["AmateurDigitalCore"],
             path: "Sources/GenerateTestAudio"
+        ),
+        .executableTarget(
+            name: "DecodeWAV",
+            dependencies: ["AmateurDigitalCore"],
+            path: "Sources/DecodeWAV"
         ),
         .testTarget(
             name: "AmateurDigitalCoreTests",
