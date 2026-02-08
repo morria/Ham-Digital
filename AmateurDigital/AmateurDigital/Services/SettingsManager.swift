@@ -144,6 +144,10 @@ class SettingsManager: NSObject, ObservableObject {
     }
 
     // Experimental Mode Toggles
+    @Published var enablePSK31: Bool {
+        didSet { save(enablePSK31, forKey: "enablePSK31") }
+    }
+
     @Published var enableBPSK63: Bool {
         didSet { save(enableBPSK63, forKey: "enableBPSK63") }
     }
@@ -220,6 +224,7 @@ class SettingsManager: NSObject, ObservableObject {
         self.outputGain = Self.initialLoadDouble(forKey: "outputGain", default: 1.0)
         self.txPreambleMs = Self.initialLoadInt(forKey: "txPreambleMs", default: 200)
 
+        self.enablePSK31 = Self.initialLoadBool(forKey: "enablePSK31", default: false)
         self.enableBPSK63 = Self.initialLoadBool(forKey: "enableBPSK63", default: false)
         self.enableQPSK31 = Self.initialLoadBool(forKey: "enableQPSK31", default: false)
         self.enableQPSK63 = Self.initialLoadBool(forKey: "enableQPSK63", default: false)
@@ -303,6 +308,7 @@ class SettingsManager: NSObject, ObservableObject {
             self.psk31Squelch = loadDouble(forKey: "psk31Squelch", default: 0.3)
             self.outputGain = loadDouble(forKey: "outputGain", default: 1.0)
             self.txPreambleMs = loadInt(forKey: "txPreambleMs", default: 200)
+            self.enablePSK31 = loadBool(forKey: "enablePSK31", default: false)
             self.enableBPSK63 = loadBool(forKey: "enableBPSK63", default: false)
             self.enableQPSK31 = loadBool(forKey: "enableQPSK31", default: false)
             self.enableQPSK63 = loadBool(forKey: "enableQPSK63", default: false)

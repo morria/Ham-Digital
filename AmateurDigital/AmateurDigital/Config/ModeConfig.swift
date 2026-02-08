@@ -8,17 +8,17 @@
 import Foundation
 
 /// Configuration for which digital modes are enabled in the app.
-/// Core modes (RTTY, PSK31) are always enabled.
+/// Core modes (RTTY) are always enabled.
 /// Experimental modes can be toggled in Settings.
 enum ModeConfig {
     /// Core modes that are always available
     static let coreModes: Set<DigitalMode> = [
         .rtty,
-        .psk31,
     ]
 
     /// Experimental modes that can be toggled by the user
     static let experimentalModes: Set<DigitalMode> = [
+        .psk31,
         .bpsk63,
         .qpsk31,
         .qpsk63,
@@ -31,6 +31,7 @@ enum ModeConfig {
 
         let settings = SettingsManager.shared
         switch mode {
+        case .psk31: return settings.enablePSK31
         case .bpsk63: return settings.enableBPSK63
         case .qpsk31: return settings.enableQPSK31
         case .qpsk63: return settings.enableQPSK63

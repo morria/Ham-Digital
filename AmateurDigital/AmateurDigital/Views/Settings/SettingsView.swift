@@ -195,6 +195,9 @@ struct SettingsView: View {
                     }
 
                     Section {
+                        Toggle(isOn: $settings.enablePSK31) {
+                            Label("PSK31", systemImage: "waveform.path")
+                        }
                         Toggle(isOn: $settings.enableBPSK63) {
                             Label("BPSK63", systemImage: "waveform.path")
                         }
