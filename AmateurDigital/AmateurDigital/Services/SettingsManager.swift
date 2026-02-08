@@ -91,6 +91,9 @@ class SettingsManager: NSObject, ObservableObject {
         didSet {
             save(useGPSLocation, forKey: "useGPSLocation")
             if useGPSLocation {
+                if locationManager == nil {
+                    setupLocationManager()
+                }
                 requestLocationUpdate()
             }
         }
@@ -173,7 +176,7 @@ class SettingsManager: NSObject, ObservableObject {
         self.operatorName = Self.initialLoadString(forKey: "operatorName", default: "")
         self.qth = Self.initialLoadString(forKey: "qth", default: "")
         self.grid = Self.initialLoadString(forKey: "grid", default: "")
-        self.useGPSLocation = Self.initialLoadBool(forKey: "useGPSLocation", default: true)
+        self.useGPSLocation = Self.initialLoadBool(forKey: "useGPSLocation", default: false)
 
         self.rttyBaudRate = Self.initialLoadDouble(forKey: "rttyBaudRate", default: 45.45)
         self.rttyMarkFreq = Self.initialLoadDouble(forKey: "rttyMarkFreq", default: 2125.0)
@@ -197,9 +200,9 @@ class SettingsManager: NSObject, ObservableObject {
         // Trigger initial sync
         cloud.synchronize()
 
-        setupLocationManager()
-
+        // Only set up location manager if GPS was previously enabled
         if useGPSLocation {
+            setupLocationManager()
             requestLocationUpdate()
         }
     }
@@ -248,7 +251,7 @@ class SettingsManager: NSObject, ObservableObject {
             self.operatorName = loadString(forKey: "operatorName", default: "")
             self.qth = loadString(forKey: "qth", default: "")
             self.grid = loadString(forKey: "grid", default: "")
-            self.useGPSLocation = loadBool(forKey: "useGPSLocation", default: true)
+            self.useGPSLocation = loadBool(forKey: "useGPSLocation", default: false)
             self.rttyBaudRate = loadDouble(forKey: "rttyBaudRate", default: 45.45)
             self.rttyMarkFreq = loadDouble(forKey: "rttyMarkFreq", default: 2125.0)
             self.rttyShift = loadDouble(forKey: "rttyShift", default: 170.0)
